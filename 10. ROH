@@ -10,7 +10,7 @@
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
 ######################################################################################
-## Step 1: Format beagle output file with GLs from ANGSD () to RZooROH format
+## Step 1: Format beagle output file with GLs from ANGSD to RZooROH format
 #!/bin/bash
 #SBATCH --job-name=beagleGL_2x
 #SBATCH --output=beagleGL_2x_%j.txt
@@ -24,7 +24,7 @@
 #SBATCH --nodes=1
 
 echo "Defining paths and variables..."
-beagle_input="/path/to/beagle_file_with_GLs_from_angsd.beagle.gz"
+beagle_input="/path/to/beagle_file" #zipped beagle file (.beagle.gz) with GLs produced with ANGSD (https://github.com/ekarabanina/lcWGS-genomic-erosion-pipeline/blob/909dc847dca08b61648b41b334182dbfc463da22/09.%20Estimating%20genotype%20likelihoods)
 out_dir="/path/to/save/results"
 
 mkdir -p $out_dir
