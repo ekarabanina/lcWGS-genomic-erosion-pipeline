@@ -1,0 +1,11 @@
+# Estimating Fst and opulation branch statistics (PBS) with ANGSD
+
+# Programs: ANGSD 0.940, RStudio
+
+# Steps:
+# 1. Create bamlists for each group/populaton
+# 2. Run doSaf per group
+# 3. Calculate 2-dimensional site frequency spectrum (SFS) for each group pair (realSFS)
+# 4. Calculate Fst binary files (realSFS)
+# 5. Extract Fst from binary files (realSFS)
+# 5. Calculate weighted Fst and PBS in R (+statistical tests)
