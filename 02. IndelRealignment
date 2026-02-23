@@ -56,7 +56,6 @@ echo "All samples processed!"
 #CPU Efficiency: 95.12% of 09:39:44 core-walltime
 #Job Wall-clock time: 02:24:56
 #Memory Utilized: 4.04 GB
-#Memory Efficiency: 40.35% of 10.00 GB
 
 ######################################################################################
 ## Step 2: Realignment
@@ -109,8 +108,6 @@ echo "All samples processed!"
 #CPU Efficiency: 97.30% of 23:58:59 core-walltime
 #Job Wall-clock time: 23:58:59
 #Memory Utilized: 2.32 GB
-#Memory Efficiency: 38.67% of 6.00 GB
-
 
 
 
