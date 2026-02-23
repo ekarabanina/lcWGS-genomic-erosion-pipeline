@@ -1,0 +1,59 @@
+# Claculating and plotting LnP(K) and Evanno's delta K from Admixture analyses.
+# Program: RStudio
+
+#Load libraries
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(gridExtra)
+
+#Load the file with likelihoods: 2 columns, col1 is run number, col2 is log likelihood value
+likes <- read.table ("only_likes2.txt", header = FALSE, sep = " ")
+colnames(likes) <- c("K", "LnP")
+
+#Calculate median probability (as in clumpak):
+median_likes <- likes %>%
+  group_by(K) %>%
+  summarise(median_LnP = median(LnP)) %>%
+  arrange(K)
+print(median_likes)
+
+# To find best K based on highest median likelihood:
+best_k <- median_likes$K[which.max(median_likes$median_LnP)]
+cat("Best K by median LnP:", best_k, "\n")
+
+#To calculate Evanno's delta K, first calculate the mean and SD of likelihoods per K.
+summary <- likes %>%
+  group_by(K) %>%
+  summarise(
+    mean_LnP = mean(LnP),
+    sd_LnP = sd(LnP)
+  ) %>%
+  arrange(K)
+print(summary)
+
+# Compute ΔK:
+deltaK <- summary %>% mutate(L1 = c(NA, diff(mean_LnP)), 
+                             L2 = c(NA, diff(diff(mean_LnP)), NA),
+                             DeltaK = abs(L2) / sd_LnP)
+print(deltaK)
+#mutate adds new columns to summary. 
+#L1 is difference between adjacent mean LnP values: L1(k)= mean LnP(K) - mean LnP(K-1).
+#L2 is the second-order difference: L2(k) = mean LnP(K+1) - 2*mean LnP(K) + mean LnP(K-1).
+
+#Plot:
+#Re-shape the table to only select LnPK and deltaK
+p1 <- ggplot(deltaK, aes(x = K, y = mean_LnP)) +
+  geom_point() + geom_line() +
+  theme_minimal() +
+  labs(x = "K", y = "Mean LnP(K)", title = "Mean LnP(K)") +
+  scale_x_continuous(breaks = deltaK$K)
+
+p2 <- ggplot(deltaK, aes(x = K, y = DeltaK)) +
+  geom_point() +
+  geom_line(na.rm = TRUE) +   # skip NA values when drawing lines
+  theme_minimal() +
+  labs(x = "K", y = "Delta K", title = "Delta K") +
+  scale_x_continuous(breaks = deltaK$K, minor_breaks = NULL)
+
+grid.arrange(p1, p2, ncol = 2)
