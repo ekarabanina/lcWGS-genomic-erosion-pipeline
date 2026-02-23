@@ -1,0 +1,324 @@
+# Admixture analysis with ngsAdmix
+
+# Programs: ngsAdmix, AWK, RStudio
+
+# Details about ngsAdmix: https://www.popgen.dk/software/index.php/NgsAdmix
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+# Admixture analysis was performed on a LD-pruned dataset of transversion SNPs for K = 1 to 5, each run with 100 iterations. Minor allele frequency (-minMaf) was set to 0.02, and minimum number of individuals with the SNP (-minInd) was set to 5. 
+
+# Steps:
+# 1. Run ngsAdmix for each K
+# 2. Extract likelihood values and prepare an input file for R 
+# 3. Estimate the most likely K in R
+# 4. Visualize admixture proportions in R with pophelper package
+
+######################################################################################
+## Step 1: Run ngsAdmix for each K
+# This step can be performed as an array job to run each K simultaneously, or one by one. Below is the code for each K individually, with the example of K = 2. Repeat for other Ks accordingly. 
+#!/bin/bash
+#SBATCH --job-name=ngsAdmix_K2_100iter
+#SBATCH --output=ngsAdmix_K2_100iter_%j.txt
+#SBATCH --error=ngsAdmix_K2_100iter_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=20G
+
+echo "Defining paths and variables..."
+input="/path/to/input/file" #a zipped beagle file with GLs (LD-pruned)
+out_dir="/path/to/save/results"
+
+mkdir -p $out_dir
+
+echo "Loading angsd module..." #for csc
+module load angsd
+
+# Limit the number of runs at a time to balance resources
+max_jobs=10 
+jobcount=0
+
+echo "Running ngsAdmix..."
+for run in {1..100}
+do
+echo "Running K=2, run=$run..."
+NGSadmix -P 1 \
+-likes $input \
+-K 2 \
+-o $out_dir/ngsAdmix2_k2_r${run} \
+-minMaf 0.02 \
+-minInd 5 \
+&>> $out_dir/ngsAdmix2_K2.log &
+
+((jobcount++))
+if (( jobcount % max_jobs == 0 )); then
+wait
+echo "Completed $jobcount jobs..."
+fi
+
+done
+wait
+echo "Done!"
+
+#---------------------
+# Use of resources:
+#Nodes: 1
+#Cores per node: 10
+#CPU Efficiency: 95.28% of 1-02:37:40 core-walltime
+#Job Wall-clock time: 02:39:46
+#Memory Utilized: 12.12 GB
+
+######################################################################################
+## Step 2: Extract likelihood values and prepare an input file for R 
+#to be added..
+
+
+
+
+######################################################################################
+## Step 3: Estimate the most likely K in R
+
+#Load libraries
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(gridExtra)
+
+#Load the file with likelihoods: 2 columns, col1 is run number, col2 is log likelihood value
+likes <- read.table ("only_likes.txt", header = FALSE, sep = " ")
+colnames(likes) <- c("K", "LnP")
+
+#Calculate median probability (as in clumpak):
+median_likes <- likes %>%
+  group_by(K) %>%
+  summarise(median_LnP = median(LnP)) %>%
+  arrange(K)
+print(median_likes)
+
+# To find best K based on highest median likelihood:
+best_k <- median_likes$K[which.max(median_likes$median_LnP)]
+cat("Best K by median LnP:", best_k, "\n")
+
+#To calculate Evanno's delta K, first calculate the mean and SD of likelihoods per K.
+summary <- likes %>%
+  group_by(K) %>%
+  summarise(
+    mean_LnP = mean(LnP),
+    sd_LnP = sd(LnP)
+  ) %>%
+  arrange(K)
+print(summary)
+
+# Compute deltaK:
+deltaK <- summary %>% mutate(L1 = c(NA, diff(mean_LnP)), 
+                             L2 = c(NA, diff(diff(mean_LnP)), NA),
+                             DeltaK = abs(L2) / sd_LnP)
+print(deltaK)
+#mutate adds new columns to summary. 
+#L1 is difference between adjacent mean LnP values: L1(k)= mean LnP(K) - mean LnP(K-1).
+#L2 is the second-order difference: L2(k) = mean LnP(K+1) - 2*mean LnP(K) + mean LnP(K-1).
+
+#Plot:
+#Re-shape the table to only select LnPK and deltaK
+p1 <- ggplot(deltaK, aes(x = K, y = mean_LnP)) +
+  geom_point() + geom_line() +
+  theme_minimal() +
+  labs(x = "K", y = "Mean LnP(K)", title = "Mean LnP(K)") +
+  scale_x_continuous(breaks = deltaK$K)
+
+p2 <- ggplot(deltaK, aes(x = K, y = DeltaK)) +
+  geom_point() +
+  geom_line(na.rm = TRUE) +   # skip NA values when drawing lines
+  theme_minimal() +
+  labs(x = "K", y = "Delta K", title = "Delta K") +
+  scale_x_continuous(breaks = deltaK$K, minor_breaks = NULL)
+
+grid.arrange(p1, p2, ncol = 2)
+
+######################################################################################
+## Step 4: Visualize admixture proportions in R with pophelper package
+# Details of pophelper package: https://github.com/royfrancis/pophelper
+
+#Install pophelper from the github page. For that, first install package "remotes".
+install.packages("remotes")
+remotes::install_github('royfrancis/pophelper')
+library(pophelper)
+
+# Set working directory
+setwd("/path/to/directory")
+
+#If loading the zipped file directly, first unzip to tempdir
+unzip ("n26_allK2.zip", exdir = "n26_allK2_unzipped")
+
+#Load all .qopt files
+#qfiles <- list.files("n26_allK2_unzipped", pattern="\\.qopt$")
+#str(qfiles)
+
+#If the qopt files are recursive in subdirectories of a workdir
+qfiles <- list.files(pattern="\\.qopt$", full.names = TRUE, recursive = TRUE)
+slist <- readQ(qfiles)
+length(slist)
+#names(slist)[1:5]
+
+#Align and merge files within and across K. Do per K, not all Ks at once
+#Extract K from filenames
+kvals <- as.numeric(gsub(".*_k([0-9]+)_r[0-9]+\\.qopt$", "\\1", qfiles))
+table(kvals)
+
+# Filter qfiles for individual K
+k1_files <- qfiles[kvals == 1]
+k2_files <- qfiles[kvals == 2]
+k3_files <- qfiles[kvals == 3]
+k4_files <- qfiles[kvals == 4]
+k5_files <- qfiles[kvals == 5]
+k5_files
+
+# Read those files
+slist_k1 <- readQ(k1_files)
+slist_k2 <- readQ(k2_files)
+slist_k3 <- readQ(k3_files)
+slist_k4 <- readQ(k4_files)
+slist_k5 <- readQ(k5_files)
+length(slist_k3)
+
+# Align runs
+aligned_k1 <- alignK(slist_k1)
+aligned_k2 <- alignK(slist_k2)
+aligned_k3 <- alignK(slist_k3)
+aligned_k4 <- alignK(slist_k4)
+aligned_k5 <- alignK(slist_k5)
+length(slist_k3)
+
+# Merge runs
+merged_k1 <- mergeQ(aligned_k1)
+merged_k2 <- mergeQ(aligned_k2)
+merged_k3 <- mergeQ(aligned_k3)
+merged_k4 <- mergeQ(aligned_k4)
+merged_k5 <- mergeQ(aligned_k5)
+length(merged_k3)
+
+#Load population and ids names
+pops <- read.table("/path/to/population_names") #a text file with names of groups for each sample (one per line)
+ids <- read.table("/path/to/ids") #a text file with sample ids (one per line)
+
+#Combine ids and pops to data frame
+group_id_df <- data.frame(group = pops, id = ids)
+colnames(group_id_df) <- c("group", "id")
+
+#Add row names to the merged files to later display them
+rownames(merged_k1[[1]]) <- group_id_df$id
+rownames(merged_k2[[1]]) <- group_id_df$id
+rownames(merged_k3[[1]]) <- group_id_df$id
+rownames(merged_k4[[1]]) <- group_id_df$id
+rownames(merged_k5[[1]]) <- group_id_df$id
+
+#Plot and save
+plotQ(merged_k1,
+      useindlab = TRUE,
+      grplab = group_id_df["group"],
+      showindlab = TRUE,
+      showgrplab = TRUE,
+      sortind = NA,
+      panelspacer = 0.2,
+      indlabsize = 3,
+      grplabsize = 1.5,
+      splabangle = 0,
+      exportpath = getwd(),
+      outputfilename = "K1",
+      imgtype = "pdf")
+
+plotQ(merged_k2,
+      useindlab = TRUE,
+      grplab = group_id_df["group"],
+      showindlab = TRUE,
+      showgrplab = TRUE,
+      sortind = NA,
+      panelspacer = 0.2,
+      indlabsize = 3,
+      grplabsize = 1.5,
+      splabangle = 0,
+      exportpath = getwd(),
+      outputfilename = "K2",
+      imgtype = "pdf")
+
+
+plotQ(merged_k3,
+      useindlab = TRUE,
+      grplab = group_id_df["group"],
+      showindlab = TRUE,
+      showgrplab = TRUE,
+      sortind = NA,
+      panelspacer = 0.2,
+      indlabsize = 3,
+      grplabsize = 1.5,
+      splabangle = 0,
+      exportpath = getwd(),
+      outputfilename = "K3",
+      imgtype = "pdf")
+
+plotQ(merged_k4,
+      useindlab = TRUE,
+      grplab = group_id_df["group"],
+      showindlab = TRUE,
+      showgrplab = TRUE,
+      sortind = NA,
+      panelspacer = 0.2,
+      indlabsize = 3,
+      grplabsize = 1.5,
+      splabangle = 0,
+      exportpath = getwd(),
+      outputfilename = "K4",
+      imgtype = "pdf")
+
+plotQ(merged_k5,
+      useindlab = TRUE,
+      grplab = group_id_df["group"],
+      showindlab = TRUE,
+      showgrplab = TRUE,
+      sortind = NA,
+      panelspacer = 0.2,
+      indlabsize = 3,
+      grplabsize = 1.5,
+      splabangle = 0,
+      exportpath = getwd(),
+      outputfilename = "K5",
+      imgtype = "pdf")
+
+#### Joined plot for K2-K5
+# Make each merged object a data frame
+merged_k2_df <- as.data.frame(merged_k2)
+merged_k3_df <- as.data.frame(merged_k3)
+merged_k4_df <- as.data.frame(merged_k4)
+merged_k5_df <- as.data.frame(merged_k5)
+
+#Give column names
+colnames(merged_k2_df) <- paste0("Cluster", 1:ncol(merged_k2_df))
+colnames(merged_k3_df) <- paste0("Cluster", 1:ncol(merged_k3_df))
+colnames(merged_k4_df) <- paste0("Cluster", 1:ncol(merged_k4_df))
+colnames(merged_k5_df) <- paste0("Cluster", 1:ncol(merged_k5_df))
+
+#Transform a list of all df to qlist
+qlist_obj <- list(K2 = merged_k2_df,
+                  K3 = merged_k3_df,
+                  K4 = merged_k4_df,
+                  K5 = merged_k5_df)
+qlist_obj <- as.qlist(qlist_obj)
+
+#Plot
+plotQ(
+  qlist = qlist_obj,
+  useindlab = TRUE,
+  grplab = group_id_df["group"],
+  showindlab = TRUE,
+  showgrplab = TRUE,
+  imgoutput = "join",
+  splabangle = 0,
+  sharedindlab = TRUE,
+  exportpath = getwd(),
+  outputfilename = "K2-K5",
+  imgtype = "pdf")
+
+
