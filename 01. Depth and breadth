@@ -1,9 +1,10 @@
 # Calculating sequencing depth (with standard deviation) and breadth of coverage.
 # Breadth of coverage means the proportion of the genome sequenced with at least 1x depth.
 
+# Program: SAMtools
+
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
-# Program: SAMtools
 # Resources: mem=6M, cpus-per-task=1, ntasks=1
 # Code below uses names for the 2x downsampled bam files. 
 
