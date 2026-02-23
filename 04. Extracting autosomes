@@ -1,0 +1,48 @@
+# Extracting autosomes from BAM files
+# Program: SAMtools
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+#!/bin/bash
+#SBATCH --job-name=autosomes
+#SBATCH --output=autosomes_%j.txt
+#SBATCH --error=autosomes_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=30M
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+input_dir="/path/to/bam_files"
+out_dir="/path/to/save/results"
+chromosomes="NC_044004.1 NC_044005.1 NC_044006.1 NC_044007.1 NC_044008.1 NC_044009.1 NC_044010.1 NC_044011.1 NC_044012.1 NC_044013.1 NC_044014.1 NC_044015.1 NC_044016.1 NC_044017.1 NC_044018.1 NC_044019.1 NC_044020.1 NC_044021.1 NC_044022.1 NC_044023.1 NC_044024.1 NC_044025.1 NC_044026.1 NC_044027.1 NC_044028.1 NC_044029.1"
+
+echo "Loading biokit module..." #for csc
+module load biokit
+
+echo "Starting a for loop..."
+for bamfile in $input_dir/*.bam
+do
+echo "Extracting filename..."
+filename=$(basename "$bamfile" .bam)
+
+echo "Extracting autosomes with samtools for $filename..."
+samtools view -h -b "$bamfile" $chromosomes > $out_dir/${filename}.autosomes.bam
+if [ $? -eq 0 ]; then
+echo "$filename successfully processed."
+else
+echo "Error processing $filename" >&2
+fi
+done
+
+echo "Done!"
+
+#---------------------
+# Use of resources:
+#Cores: 1
+#CPU Efficiency: 99.30% of 06:19:13 core-walltime
+#Job Wall-clock time: 06:19:13
+#Memory Utilized: 13.38 MB
