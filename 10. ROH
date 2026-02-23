@@ -1,0 +1,245 @@
+# Runs of homozygosity (ROH) analysis with RZooROH. 
+
+# Programs: AWK, RZooROH, RStudio
+
+# RZooROH package description: Bertrand AR, Kadri NK, Flori L, Gautier M, Druet T. RZooRoH: An R package to characterize individual genomic autozygosity and identify homozygous-by-descent segments. Methods Ecol Evol. 2019; 10: 860–866. https://doi.org/10.1111/2041-210X.13167
+# Note that in RZooROH, the input file corresponding to ANGSD's genotype likelihoods format is called "genotype probability". 
+
+# The analysis comprises two steps: formatting the input file (angsd -> rzooroh), and running RZooROH. 
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+######################################################################################
+## Step 1: Format beagle output file with GLs from ANGSD () to RZooROH format
+#!/bin/bash
+#SBATCH --job-name=beagleGL_2x
+#SBATCH --output=beagleGL_2x_%j.txt
+#SBATCH --error=beagleGL_2x_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem-per-cpu=3M
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+beagle_input="/path/to/beagle_file_with_GLs_from_angsd.beagle.gz"
+out_dir="/path/to/save/results"
+
+mkdir -p $out_dir
+
+echo "Running awk to keep only autosomes and split chr and position to own columns..."
+gunzip -c $beagle_input |\
+awk '
+NR == 1 {
+    # Modify header line
+    printf "chr\tpos";
+    for (i = 2; i <= NF; i++) {
+        printf "\t%s", $i;
+    }
+    print "";
+    next;
+}
+{
+    # Split marker into chr and pos: In my case, the chromosomes are in a format "NC_044004.1", so the split needs to be at the second underscroe, which separates the chromosome name and the position (e.g., NC_044004.1_83, where NC_044004.1 is chromosome, and 82 is position).
+    split($1, a, "_");
+    chr = a[1] "_" a[2];
+    pos = a[3];
+    printf "%s\t%s", chr, pos;
+    for (i = 2; i <= NF; i++) {
+        printf "\t%s", $i;
+    }
+    print "";
+}' | gzip > $out_dir/gl_2x.ROH.beagle.gz
+
+#---------------------
+# Use of resources:
+#Cores: 1
+#CPU Efficiency: 98.28% of 00:01:56 core-walltime
+#Job Wall-clock time: 00:01:56
+#Memory Utilized: 2.35 MB
+
+######################################################################################
+## Step 2: Run RZooROH (cluster + R)
+# Here, I ran the program on cluster due to large memory requirements of the model and for convenience. The actual RScript is below.
+
+#!/bin/bash
+#SBATCH --job-name=roh_Rscript_K12b2_err0.001_2x
+#SBATCH --output=roh_Rscript_K12b2_err0.001_2x_%j.txt
+#SBATCH --error=roh_Rscript_K12b2_err0.001_2x_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=6
+#SBATCH --mem=30G
+#SBATCH --nodes=1
+
+# Load r-env #for csc
+module load r-env
+
+# Clean up .Renviron file in home directory
+if test -f ~/.Renviron; then
+    sed -i '/TMPDIR/d' ~/.Renviron
+fi
+
+# Specify a temp folder path
+echo "TMPDIR=/path/to/temp/folder" >> ~/.Renviron
+
+# Run the R script
+srun apptainer_wrapper exec Rscript --no-save /path/to/Rscript/roh_Rscript_K12b2_err0.001_2x.R
+
+#---------------------
+# Use of resources
+Nodes: 1
+Cores per node: 6
+CPU Efficiency: 86.86% of 1-00:26:42 core-walltime
+Job Wall-clock time: 04:04:27
+Memory Utilized: 26.47 GB
+
+######################################################################################
+## R script for RZooROH
+
+# 1. Set working directory
+setwd("/path/to/directory")
+
+# 2. Install RZooRoh
+#Specify an additional folder for storing R libraries in R version 4.3
+.libPaths(c("/path/to/store/Rlibraries", .libPaths()))
+
+#Check that the folder went to the used library paths
+.libPaths()
+
+install.packages("RZooRoH")
+library (RZooRoH)
+
+# 3. Read data into R; supcol is number of columns before the first probability value, poscol = column wiht position number, chrcol = column with chromosome name
+data <- zoodata("/path/to/input_file.beagle.gz", 
+                zformat = "gp", 
+                supcol = 4, 
+                poscol = 2, 
+                chrcol = 1, 
+                samplefile = "/path/to/sampleIDs") #sample IDs is a text file containing sample names, one per line.
+str(data)
+
+# 4. Explore the data
+data@nind #number of individuals
+data@nsnps #number of snps
+data@nchr #number of chromosomes
+data@sample_ids #ids of samples; here just numbers unless provided with additional data file (.txt)
+head(data@bp) # bp is an array with the marker genetic positions
+head(data@freqs) #freqs is estimates of allele frequencies for the first allele (major allele in my data)
+head(data@genos) #genos is a matrix with genotype probabilities (or genotypes/allele counts if these were the input files)
+
+# 5. Define the model
+mixK12_b2 <- zoomodel(K=12, base=2,layers=TRUE)
+mixK12_b2
+
+# Default model is with 10 classes (9 HBD and 1 non-HBD class) and a base rate = 2
+#K=10 - number of classes
+#Setting to few classes (to small Rk for the last class) is not optimal because the last class will capture its HBD segments and those from the unmodeled older classes with a higher rate
+#base=2 (base_rate) - step of a base for exponential increase. default is 2. base = 2 means steps 2,4,8,16..; base/2 = generations ago (i.e. for base 2 we look at ancestors 1 generation ago). base = 4 means steps of 4,16,64,256..; base = 10  means 10, 100, 1000, 10000, etc). Larger steps reduce resolution.
+#The power of two [2, 4, 8, 16, . . . , 1024, 2048, 4096] allows to have more classes for long HBD segments that for shorter segments.
+#err=0.001 - genotyping error rate, default 0.001
+#seqerr=0.001 - sequencing error rate, default 0.001
+#layers=TRUE - is true by default; true means that the model uses multiple layers to handle the segmentation of data
+
+# 6. Run zoorun to establish global and local HBD
+res_K12b2 <- zoorun(mixK12_b2, data, nT = 6) #adjust number of threads accordingly
+
+# Default settings in zoorun:
+#ids = NULL,
+#method = "opti",
+#fb = TRUE, estimates realized autozygosity in each HBD class (percentage of the genome from an individual associate with a specific HBD class); fb is Forward-Backward algorithm
+#vit = TRUE,
+#minr = 0,
+#maxr = 1e+08,
+#maxiter = 1000,
+#convem = 1e-10,
+#localhbd = FALSE, - locus specific HBD probabilities
+#nT = 1  - number of threads
+
+
+# 7. Save the output from the zoorun using saveRDS
+saveRDS(res_K12b2, file = "res12Kb2_2x")
+# To load the saved file back to R (for example, to later explore the data interactively):
+#res_K12b2 <- readRDS(file = "res12Kb2_2x") #keep this line silent if running the batch job, so the file does not get loaded again unnecessarily.
+
+
+# 8. Check results
+# 8.1. General
+str(res_K12b2)
+res_K12b2@nind # number of analyzed individuals
+res_K12b2@ids # array with the numbers of the analyzed individuals
+res_K12b2@krates # number of K rates, a matrix with nind columns (the number of individuals) and K rows containing the (estimated) Rk for each individual (in rows) and each class (in columns). 
+res_K12b2@modlik # an array with the estimated log(likelihood) of the model at convergence for each individual
+res_K12b2@modbic # an array with the estimated BIC of the model at convergence for each individual
+res_K12b2@niter # an array with the number of iterations for parameter estimation for each individual
+res_K12b2@optimerr # an array indicating whether optim ran without error (for each individual)
+res_K12b2@mixc # mixing coefficients, a matrix with nind columns and K rows containing estimated mixing coeffifients Mk for each individual (in rows) and each class (in columns)
+
+# Check which individuals have an error in optimization (if any)
+problem_ind <- which(res_K12b2@optimerr == 0)
+data@sample_ids[problem_ind]
+
+
+# 8.2. Realized autosugosity per HBD class. It is one of the main outputs of the model (fb algorithm).
+res_K12b2@realized 
+
+# it is a matrix with K columns and nani lines (one per individual). 
+# Values are genome-wide contributions, i.e. proportions, (averaged across all positions) of a class to the genome of an individual. 
+# The last column is non-HBD class. I.e. 1-(value in non-HBD) shows the autozygosity level for an individual.
+# Also check in which classes the values are the highest.
+# As these are proportions, you can multiply them by 100% to get percentage of genome.
+
+# Extract the estimated realized autozygosity per HBD class (columns) for each individual (rows). 
+HBD_per_class_res_K12b2 <- as.data.frame(res_K12b2@realized)
+row.names(HBD_per_class_res_K12b2) <- data@sample_ids #add sample names
+head(HBD_per_class_res_K12b2)
+
+# Save the output
+write.table(HBD_per_class_res_K12b2, "HBD_per_class_res_K12b2_2x.csv", sep = " ", row.names = TRUE, col.names = TRUE, quote = F)
+
+
+# 8.3. HBD segments (Viterbi algorithm)
+res_K12b2@hbdseg
+# Alternatively to typing full name, for viewing HBD segments use command rohbd()
+hbd_res_K12b2 <- rohbd(zres=res_K12b2)
+head(hbd_res_K12b2)
+dim(hbd_res_K12b2)
+
+# Explore results:
+head(res_K12b2@hbdseg$id) #number of the individual in which the HBD segments is located;
+head(res_K12b2@hbdseg$chrom) #chromosome number of the HBD segments (this chromosome number refers to the position of the chromosome in the list of all chromosomes present in the input genotype data);
+head(res_K12b2@hbdseg$start_snp) #number of the SNP at which the HBD segment starts (the SNP number within the chromosome);
+head(res_K12b2@hbdseg$end_snp) #number of the SNP at which the HBD segment ends (the SNP number within the chromosome);
+head(res_K12b2@hbdseg$start_pos) #position at which the HBD segment starts (within the chromosome);
+head(res_K12b2@hbdseg$end_pos) #position at which the HBD segment ends (within the chromosome);
+head(res_K12b2@hbdseg$number_snp) #number of consecutive SNPs in the HBD segment;
+head(res_K12b2@hbdseg$length) #length of the HBD segment (for instance in bp or in cM/1000000);
+head(res_K12b2@hbdseg$HBDclass) #HBD class associated with the HBD segment
+
+dim(res_K12b2@hbdseg)
+summary(res_K12b2@hbdseg$length) 
+summary(res_K12b2@hbdseg$number_snp)
+
+# Save the output
+HBDseg_res_K12b2 <- as.data.frame(res_K12b2@hbdseg)
+head(HBDseg_res_K12b2)
+write.table(HBDseg_res_K12b2, "HBDseg_res_K12b2_2x.csv", sep = " ", row.names = TRUE, col.names = TRUE, quote = F)
+
+
+# 9. Plotting
+# 9.1. Proportion of the genome associated with different HBD clases
+pdf("prophbd_res_K12b2_2x.pdf", width = 9, height = 7)
+zooplot_prophbd(res_K12b2, cols = 'tomato', style = 'boxplot')
+dev.off() #this is used to reset the figure margins and fit the plot; i.e. run the plot command after this command
+
+# 9.2. Partitioning individual genomes in different HBD classes
+pdf("HBDperClass_res_K12b2_2x.pdf", width = 9, height = 7)
+zooplot_partitioning(res_K12b2, ylim = c(0,0.5), nonhbd = FALSE)
+dev.off()
+
+
+
