@@ -1,0 +1,48 @@
+# MapDamage2: identifying DNA damage patterns and rescaling quality scores of likely damaged positions in the reads.
+# Program: MapDamage2: https://ginolhac.github.io/mapDamage/
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+# The program can be run individually for each bam file or as an array job to process multiple files. Below is the script for an array job.
+
+#!/bin/bash
+#SBATCH --job-name=array_mapdamage
+#SBATCH --output=array_mapdamage_%j.txt
+#SBATCH --error=array_mapdamage_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=800M
+#SBATCH --array=1-26
+
+echo "Defining paths and variables..."
+ref_genome="/path/to/reference_genome.fna"
+input_list="/path/to/bamlist" #bamlist is a text file, where each line is a full path to the bam file of the sample
+output_dir="/path/to/save/results"
+
+mkdir -p $sample_outdir
+
+echo "Loading r module and setting environment for mapDamage..." #for csc
+module load r-env
+export PATH="/path/to/mapdamage/bin:$PATH"
+
+echo "Starting an array job..."
+bamfile=$(sed -n "${SLURM_ARRAY_TASK_ID}p" $input_list)
+filename=$(basename "$bamfile" _indelRealigned.bam)
+sample_outdir=$output_dir/$filename
+
+echo "Running mapDamage..."
+mapDamage -i $bamfile -r $ref_genome -d $sample_outdir --rescale
+
+echo "Done!"
+
+#---------------------
+# Use of resources for one job of the array:
+#Array Job ID: 27904461_26
+#Cores: 1
+#CPU Efficiency: 98.70% of 02:40:36 core-walltime
+#Job Wall-clock time: 02:40:36
+#Memory Utilized: 286.23 MB #for some samples 600M was not sufficient
+#Memory Efficiency: 47.71% of 600.00 MB
