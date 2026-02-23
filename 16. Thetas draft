@@ -1,0 +1,11 @@
+# Estimating thetas (nucleotide diversity, Watterson's theta, and Tajima's D) with ANGSD
+
+# Programs: ANGSD 0.940, RStudio
+
+# Steps:
+# 1. Create bamlists for each group/populaton
+# 2. Run doSaf per group
+# 3. Calculate SFS for each group pair (realSFS)
+# 4. Calculate per-site thetas (saf2theta)
+# 5. Calculate neutrality test statistics (thetaStat)
+# 6. Calculate weighted thetas, plot, and do statistical comparisons of groups in R
