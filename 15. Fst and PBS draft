@@ -8,4 +8,4 @@
 # 3. Calculate 2-dimensional site frequency spectrum (SFS) for each group pair (realSFS)
 # 4. Calculate Fst binary files (realSFS)
 # 5. Extract Fst from binary files (realSFS)
-# 5. Calculate weighted Fst and PBS in R (+statistical tests)
+# 6. Calculate weighted Fst and PBS in R (+statistical tests)
