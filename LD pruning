@@ -1,0 +1,242 @@
+# Linkage disequilibrium (LD) pruning with ngsLD
+
+# Details on ngsLD: https://github.com/fgvieira/ngsLD; and the corresponding publication: Emma A Fox, Alison E Wright, Matteo Fumagalli, Filipe G Vieira, ngsLD: evaluating linkage disequilibrium using genotype likelihoods, Bioinformatics, Volume 35, Issue 19, October 2019, Pages 3855–3856, https://doi.org/10.1093/bioinformatics/btz200
+
+# Programs: ngsLD, prune_graph, GAWK/AWK, RStudio
+
+# LD pruning was performed only on dataset excluding transitions.
+# Steps: 
+# 1. Create a file with SNP positions
+# 2. Run ngsLD (you need to know the number of SNPs - check from angsd GL output, e.g., from mafs file)
+# 3. Plot LD decay (binning the data and plotting)
+# 4. Prune linked loci with prune_graph
+# 5. Filter out the beagle GL file by excluding loci that had been identified as linked
+
+######################################################################################
+## Step 1: Creating a file with SNP positions (needed for ngsLD)
+#!/bin/bash
+#SBATCH --job-name=ngsls_positions_rmTrans
+#SBATCH --output=ngsld_positions_rmTrans_%j.txt
+#SBATCH --error=ngsld_positions_rmTrans_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=02:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=10M
+#SBATCH --nodes=1
+
+input_dir="/path/to/input/folder" #a folder that contains mafs file produced with ANGSD GL (https://github.com/ekarabanina/lcWGS-genomic-erosion-pipeline/blob/909dc847dca08b61648b41b334182dbfc463da22/09.%20Estimating%20genotype%20likelihoods)
+out_dir="/path/to/save/results"
+
+mkdir -p $out_dir
+
+gunzip -c $input_dir/gl_2x_rmTrans.mafs.gz | \
+gawk 'NR==1 {print "chr\tposition"; next} {print $1 "\t" $2}' \
+> $out_dir/posH_ngsLD_2x_rmTrans.txt # posH indicates that the file will have a header - you need to know that for the later steps (ngsLD settings)
+
+######################################################################################
+## Step 2: Running ngsLD for SNPs within 500 kb
+#!/bin/bash
+#SBATCH --job-name=ngsLD_500kb_2x_rmTrans
+#SBATCH --output=ngsLD_500kb_2x_rmTrans_%j.txt
+#SBATCH --error=ngsLD_500kb_2x_rmTrans_%j.txt
+#SBATCH --account=<name?
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=2G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+ngsLD="/path/to/ngsLD"
+input_file="/path/to/beagle_file" #zipped beagle file (.beagle.gz) with GLs produced with ANGSD (https://github.com/ekarabanina/lcWGS-genomic-erosion-pipeline/blob/909dc847dca08b61648b41b334182dbfc463da22/09.%20Estimating%20genotype%20likelihoods)
+out_dir="/path/to/save/results"
+positions="/path/to/positions" #the text file with SNP positions produced in Step 1 (see above).
+
+mkdir -p $out_dir
+
+echo "Loading gsl module..." #for csc
+module load gsl/2.7.1
+
+echo "Running ngsLD..."
+$ngsLD --geno $input_file \
+--probs \
+--posH $positions \
+--n_ind 26 \
+--n_sites 846418 \
+--max_kb_dist 500 \
+--max_snp_dist 0 \
+--n_threads 8 \
+--out $out_dir/LD_500kb_2x_rmTrans.ld
+
+echo "Done!"
+
+
+######################################################################################
+## Step 3: LD decay plotting
+#==============================
+# 3.1. Bin data for easier handling when plotting. Here, bin size is 150. I.e. linkage statistics (r2) is summed for the bin class, thereby the resulting file will have less values, which are easier to plot.
+#
+#!/bin/bash
+#SBATCH --job-name=binning_10pct_rmTrans
+#SBATCH --output=binning_10pct_rmTrans_%j.txt
+#SBATCH --error=binning_10pct_rmTrans_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=10M
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+dir="/path/to/directory" #directory where the file from ngsLD is located and where to save the results
+
+echo "Running gawk..."
+gawk -F"\t" ' #specify that in input file the vlaues are divided by tab
+BEGIN { OFS="\t" } # define output field separator between fields, here - tab
+NR>1 { #skip header line for further calculations
+  bin = int($3 / 150) * 150; # bin by distance (column 3 = dist), so if distance is 370, it will go to the same bin with 449
+  sum[bin] += $7;            # sum r2 in col 7 for each bin
+  count[bin] += 1; #count how many values are in the bin, needed for caluclating the average r2 for bin
+}
+END {
+  for (b in sum) { #loop the command below for each bin
+    print b, sum[b]/count[b] # print bin and mean r2
+  }
+}
+' $dir/LD_10pct_rmTrans.ld | sort -k1,1n > $dir/LD_10pct_binned150_rmTrans.txt
+
+echo "Done!"
+
+#==============================
+# 3.2. LD decay plotting in R
+library(data.table)
+library(ggplot2)
+library(scales)
+library(dplyr)
+
+# 1. Set working directory
+setwd("/path/to/workdir")
+
+# 2. Load data
+ld_10_bins <- fread("2x_rmTrans_LD_10pct_500kb_binned150_rmTrans.txt", header = FALSE, sep = "\t")
+setnames(ld_10_bins, c("dist", "r2"))   # Rename columns
+
+# 3. Plot
+#Adding all minor breaks as major for Y axis, R2
+all_breaks <- seq(0, ceiling(max(ld_10_bins$r2) * 100) / 100, by = 0.02)
+ggplot(ld_10_bins, aes(x = dist / 1000, y = r2)) +
+  geom_point(alpha = 0.3, size = 0.5) +
+  labs(x = "Distance (kb)", y = expression(R^2)) +
+  scale_x_continuous(
+    breaks = seq(0, max(ld_10_bins$dist) / 1000, by = 50),
+    labels = scales::comma
+  ) +
+  scale_y_continuous(
+    breaks = all_breaks
+  ) +
+  theme_minimal()
+
+#Check at what distance and r2 does the graph reach plateau. Use these values for settings in prune_graph (next step, see below).
+
+
+######################################################################################
+## Step 4: Pruning LD with prune_graph
+# Details on prune_graph: https://github.com/fgvieira/prune_graph
+
+#!/bin/bash
+#SBATCH --job-name=prune_graph_500kb_rmTrans
+#SBATCH --output=prune_graph_500kb_rmTrans_%j.txt
+#SBATCH --error=prune_graph_500kb_rmTrans_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=4G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+dir="/path/to/directory" #directory where the file from ngsLD is located and where to save the results
+prune_graph="/path/to/prune_graph"
+
+echo "Running prune_graph..."
+$prune_graph --n-threads 8 \
+--in $dir/LD_500kb_2x_rmTrans.ld \
+--header \
+--weight-field "r2" \
+--weight-filter "r2 > 0.12" \
+--out $dir/unlinked_500kb_rmTrans \
+--out-excl $dir/linked_500kb_rmTrans
+
+echo "Done!"
+
+
+######################################################################################
+## Step 5: Filtering out the beagle GL file by excluding loci that had been identified as linked
+# The output from prune_graph creates two files: with linked and unliked loci. Use the list of linked loci to define which to exclude from the original beagle GL file.
+#==============================
+# 5.1. Format and sort the list of linked loci:
+#!/bin/bash
+#SBATCH --job-name=sort_format_linked
+#SBATCH --output=sort_format_linked_%j.txt
+#SBATCH --error=sort_format_linked_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=3M
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+dir="/path/to/directory" #directory where the file from ngsLD is located and where to save the results
+
+echo "Replacing : with _ and sorting numerically..."
+sed 's/:/_/' $dir/linked_500kb_rmTrans | \
+sort -t_ -k2,2 -k3,3n - > $dir/linked_0.12_sorted_formatted.txt
+
+echo "Done!"
+
+#==============================
+# 5.2. Remove linked loci from the beagle file
+#!/bin/bash
+#SBATCH --job-name=unlinked_snp
+#SBATCH --output=unlinked_snp_%j.txt
+#SBATCH --error=unlinked_snp_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=3M
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+beagle_dir="/path/to/directory/with/beagle_file" #directory that containes zipped beagle file (.beagle.gz) with GLs produced with ANGSD (https://github.com/ekarabanina/lcWGS-genomic-erosion-pipeline/blob/909dc847dca08b61648b41b334182dbfc463da22/09.%20Estimating%20genotype%20likelihoods)
+ld_file="/path/to/linked/loci_list" #a text file with a list of linked loci from the previous step (5.1., see above)
+
+echo "Removing linked snps..."
+gunzip -c $beagle_dir/gl_2x_rmTrans.beagle.gz | \
+gawk '
+NR == FNR { exclude[$1]; next }
+FNR == 1 { print; next }
+!($1 in exclude)
+' $ld_file - | \
+gzip > $beagle_dir/gl_2x_rmTrans.unlinked500kb.beagle.gz
+
+echo "Done!"
+
+
+
+
+
+
+
+
+
+
+
