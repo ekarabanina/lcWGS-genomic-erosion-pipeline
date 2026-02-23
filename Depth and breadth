@@ -1,0 +1,67 @@
+# Calculating sequencing depth (with standard deviation) and breadth of coverage.
+# Breadth of coverage means the proportion of the genome sequenced with at least 1x depth.
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+# Program: SAMtools
+# Resources: mem=6M, cpus-per-task=1, ntasks=1
+# Code below uses names for the 2x downsampled bam files. 
+
+echo "Defining paths and variables..."
+input_dir="/path/to/bam/files"
+out_dir="/path/to/save/results"
+
+mkdir -p "$out_dir"
+
+echo "Loading biokit module..." #this is for csc.fi ; contains samtools
+module load biokit
+
+echo "Starting a for loop..."
+for bamfile in $input_dir/*.bam
+do
+echo "Extracting file name..."
+filename=$(basename $bamfile .bam)
+
+echo "Creating a variable for the output file..."
+depth_file="$out_dir/${filename}_depth_2x_allpos.txt"
+
+echo "Running samtools depth all positions for sample $filename ..."
+samtools depth -a -H $bamfile -o $depth_file
+
+echo "Running awk to calculate average depth, breadth, and stdev for autosomes for $filename..."
+awk -v sample="$filename" \
+-v avg_out="$out_dir/Average_depth_2x.txt" \
+-v breadth_out="$out_dir/Breadth_of_coverage_2x.txt" \
+-v stdev_out="$out_dir/stdev_depth_2x.txt" '
+BEGIN {
+  autosomes["NC_044004.1"] = 1; autosomes["NC_044005.1"] = 1; autosomes["NC_044006.1"] = 1;
+  autosomes["NC_044007.1"] = 1; autosomes["NC_044008.1"] = 1; autosomes["NC_044009.1"] = 1;
+  autosomes["NC_044010.1"] = 1; autosomes["NC_044011.1"] = 1; autosomes["NC_044012.1"] = 1;
+  autosomes["NC_044013.1"] = 1; autosomes["NC_044014.1"] = 1; autosomes["NC_044015.1"] = 1;
+  autosomes["NC_044016.1"] = 1; autosomes["NC_044017.1"] = 1; autosomes["NC_044018.1"] = 1;
+  autosomes["NC_044019.1"] = 1; autosomes["NC_044020.1"] = 1; autosomes["NC_044021.1"] = 1;
+  autosomes["NC_044022.1"] = 1; autosomes["NC_044023.1"] = 1; autosomes["NC_044024.1"] = 1;
+  autosomes["NC_044025.1"] = 1; autosomes["NC_044026.1"] = 1; autosomes["NC_044027.1"] = 1;
+  autosomes["NC_044028.1"] = 1; autosomes["NC_044029.1"] = 1;
+}
+NR > 1 && ($1 in autosomes) {
+d = $3;
+sum += d;
+sumsq += d * d;
+count++;
+if (d > 0) covered++;
+}
+END {
+avg = (count > 0 ? sum / count : 0);
+variance = (count > 0 ? ((sumsq / count) - (avg * avg)) : 0);
+stdev = (variance > 0) ? sqrt(variance) : 0;
+breadth = (count > 0 ? (covered / count) * 100 : 0);
+printf "%s\t%.3f\n", sample, avg >> avg_out;
+printf "%s\t%.3f\n", sample, stdev >> stdev_out;
+printf "%s\t%.3f\n", sample, breadth >> breadth_out;
+}
+' "$depth_file"
+
+done
+echo "All samples processed!"
+
