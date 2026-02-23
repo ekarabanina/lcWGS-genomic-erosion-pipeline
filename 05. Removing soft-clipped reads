@@ -1,0 +1,46 @@
+# Removing soft-clipped reads from sequences. This step was done for bam files containing only autosomes.
+# Programs: SAMtools, AWK
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+#!/bin/bash
+#SBATCH --job-name=excluding_softClips_autosomes_preprocessed
+#SBATCH --output=excluding_softClips_autosomes_preprocessed_%j.txt
+#SBATCH --error=excluding_softClips_autosomes_preprocessed_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=20M
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+input_dir="/path/to/bam_files"
+out_dir="/path/to/save/results"
+
+mkdir -p $out_dir
+
+echo "Loading biokit module..." #for csc
+module load biokit
+
+echo "Starting a for loop..."
+for bamfile in $input_dir/*.bam
+do
+echo "Extracting filename..."
+filename=$(basename "$bamfile" .bam)
+
+echo "Removing soft clipped reads for $filename..."
+samtools view -h "$bamfile" |\
+awk 'BEGIN {OFS="\t"} /^@/ || $6 !~ /S/' | \
+samtools view -b - > $out_dir/${filename}_noSoftClips.bam
+
+done
+echo "Done!"
+
+#---------------------
+# Use of resources:
+#Cores: 1
+#CPU Efficiency: 99.38% of 05:59:03 core-walltime
+#Job Wall-clock time: 05:59:03
+#Memory Utilized: 9.73 MB
