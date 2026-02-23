@@ -1,0 +1,52 @@
+# Substitution error rate estimation with ANGSD based on genotype likelihoods.
+# See program description: https://www.popgen.dk/angsd/index.php/Error_estimation
+
+# Program: ANGSD 0.940
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+#  The analyses was run per chromosome as an array job to optimize the resource use.
+#!/bin/bash
+#SBATCH --job-name=doError_array_2x
+#SBATCH --output=doError_array_2x_%A_%a.txt
+#SBATCH --error=doError_array_2x_%A_%a.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=4G #smaller chromosomes run on about 500M memory, but larger need c.3G memory
+#SBATCH --array=1-26
+
+echo "Defining paths and variables..."
+ref_genome="/path/to/reference_genome.fna"
+bamlist="/path/to/bamlist" #bamlist is a text file, where each line is a full path to the bam file of the sample
+out_dir="/path/to/save/results"
+chromosomes="/path/to/chromosomes_list" #a text file, where each line is a name of a chromosome
+
+mkdir -p $out_dir
+
+echo "Loading angsd module..." for csc
+module load angsd
+
+echo "Read chromosome..."
+chr=$(sed -n "${SLURM_ARRAY_TASK_ID}p" $chromosomes)
+
+echo "Running angsd for chromosome $chr..."
+angsd -P 1 -bam $bamlist -ref $ref \
+-r $chr \
+-out $out_dir/doError_${chr} \
+-remove_bads 1 -uniqueOnly 1 -only_proper_pairs 1 \
+-baq 1 -C 50 \
+-doMajorMinor 2 \
+-minMapQ 30 -minQ 20 \
+-skipTriallelic 1 \
+-minInd 5 \
+-doCounts 1 \
+-doError 1 -minPhat 0.02 -minSites 10000 \
+-setMinDepthInd 1 -setMaxDepthInd 8 \
+&> $out_dir/doError_${chr}.log
+
+echo "Done processing chromosome $chr!"
+echo "All done!"
+
