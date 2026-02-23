@@ -44,5 +44,4 @@ echo "Done!"
 #Cores: 1
 #CPU Efficiency: 98.70% of 02:40:36 core-walltime
 #Job Wall-clock time: 02:40:36
-#Memory Utilized: 286.23 MB #for some samples 600M was not sufficient
-#Memory Efficiency: 47.71% of 600.00 MB
+#Memory Utilized: 286.23 MB #for some samples 600M was not sufficient, so plan with some extra memory
