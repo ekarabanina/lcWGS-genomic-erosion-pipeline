@@ -1,6 +1,7 @@
 # Downsampling sequencing depth to 2x (randomly). 
 # The code requires a file with average sequencing depth per sample calculated beforehand (e.g.: Depth and breadth: https://github.com/ekarabanina/lcWGS-genomic-erosion-pipeline/blob/main/Depth%20and%20breadth). 
 # The idea is to calculate the fraction of reads from original file to retain in order ro achieve the target downsampled depth. 
+# Note: after downsampling, perfrom indexing again (samtools index). 
 
 # Program: SAMtools
 
