@@ -1,0 +1,46 @@
+# Sorting and indexing BAM files after manipulations (extracting auotosmes and removing soft-clipped reads).
+# Program: SAMtools
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+#!/bin/bash
+#SBATCH --job-name=sorting_indexing_autosomes_noSoftClips
+#SBATCH --output=sorting_indexing_autosomes_noSoftClips_%j.txt
+#SBATCH --error=sorting_indexing_autosomes_noSoftClips_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=1G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+input_dir="/path/to/bam_files"
+out_dir="/path/to/save/results"
+
+mkdir -p $out_dir
+
+echo "Loading biokit module..." #for csc
+module load biokit
+
+for bamfile in $input_dir/*.bam
+do
+echo "Extracting file name..."
+filename=$(basename $bamfile .bam)
+
+echo "Sorting $filename..."
+samtools sort $bamfile -o $out_dir/${filename}.sorted.bam
+
+echo "Indexing $filename..."
+samtools index $out_dir/${filename}.sorted.bam
+
+done
+echo "Done!"
+
+#---------------------
+# Use of resources:
+#Cores: 1
+#CPU Efficiency: 99.27% of 06:41:01 core-walltime
+#Job Wall-clock time: 06:41:01
+#Memory Utilized: 866.19 MB
