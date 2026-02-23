@@ -1,0 +1,39 @@
+# Downsampling sequencing depth to 2x (randomly). 
+# The code requires a file with average sequencing depth per sample calculated beforehand (e.g.: Depth and breadth: https://github.com/ekarabanina/lcWGS-genomic-erosion-pipeline/blob/main/Depth%20and%20breadth). 
+# The idea is to calculate the fraction of reads from original file to retain in order ro achieve the target downsampled depth. 
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+# Program: SAMtools
+# Resources: mem=7M, cpus-per-task=1, ntasks=1; array job.
+
+echo "Defining paths and variables..."
+input_list="/path/to/bamlist.txt"
+out_dir= “/path/to/save/results"
+depth_file="/path/to/sample-depth.txt"
+
+mkdir -p $out_dir
+
+seed=42  # fixed seed for reproducibility
+
+echo "Loading biokit module..." #this is for csc.fi ; contains samtools
+module load biokit
+
+echo "Starting an array job..."
+echo "Extracting sample name..."
+bamfile=$(sed -n "${SLURM_ARRAY_TASK_ID}p" $input_list)
+filename=$(basename "$bamfile" _indelRealigned.rescaled.autosomes_noSoftClips.sorted.bam)
+
+echo "Calculating the fraction to downsample to 2x..."
+depth=$(awk -v name="$filename" '$1 == name {print $2}' $depth_file) #to connect the depth of each sample with it’s bam file
+fraction=$(awk -v d="$depth" 'BEGIN { printf "%.3f", 2/d }') #calculates the subsampling fraction needed to downsample to 2x coverage
+frac_part=$(awk -v d="$depth" 'BEGIN { printf "%.3f", 2/d }' | cut -d. -f2) #extract only the decimal part to avoid the problem of .0. in samtools
+
+echo "Sample: $filename, original avg depth: $depth, sampling fraction: $fraction"
+
+echo "Downsampling $filename to 2x..."
+outbam=${out_dir}/${filename}_2x.bam
+samtools view -s ${seed}.${frac_part} -b $bamfile > $outbam
+
+echo "Completed for $filename"
+
