@@ -1,0 +1,10 @@
+# Estimating individual genome-wide heterozygosity with ANGSD
+
+# Programs: ANGSD 0.940, RStudio
+
+# Steps:
+# 1. Run doSaf per sample
+# 2. Run realSFS per sample with 100 bootstrap replications
+# 3. Merge output files from realSFS to one file
+# 4. Plot and calculate in R
+
