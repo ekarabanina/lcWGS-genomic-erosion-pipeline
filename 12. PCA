@@ -1,0 +1,92 @@
+# Principal component analysis (PCA) with PCAngsd
+
+# Programs: PCAngsd, RStudio
+
+# Details about PCAngsd: https://www.popgen.dk/software/index.php/PCAngsd
+
+# Steps:
+# 1. Run PCAngsd to obtain a covariate matrix
+# 2. Analyse the covariate matrix and plot the PCA plot in RStudio
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+######################################################################################
+## Step 1: Running PCAangsd
+#!/bin/bash
+#SBATCH --job-name=pcangsd_2x_rmTrans
+#SBATCH --output=pcangsd_2x_rmTrans_%j.txt
+#SBATCH --error=pcangsd_2x_rmTrans_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=15
+#SBATCH --mem=1G
+#SBATCH --nodes=1
+
+# Define paths and variables
+echo "Defining paths and variables..."
+input_dir="/path/to/dir/with/beagle/file" #a directory that contains LD pruned beagle file with GLs
+out_dir="/path/to/save/results"
+
+echo "Running pcangsd..."
+pcangsd --beagle $input_dir/gl_2x_rmTrans.unlinked.beagle.gz \
+--out $out_dir/pcangsd_2x_rmTrans \
+--threads 15 --maf 0.02 --iter 5000 \
+&> $out_dir/pcangsd_2x_rmTrans.log
+
+echo "Done!"
+
+######################################################################################
+## Step 2: Processing and plotting in RStudio
+#Set working directory
+setwd("/path/to/workdir")
+
+#Define groups and colours
+group <- c(rep("PRE", 7), rep("BOT", 9), rep("POST", 10))
+colour <- c("POST" = "#440154", "BOT" = "#FFDD44", "PRE" = "#21918c")
+group_col <- colour[group]
+
+#Load the covariate matrix from pcangsd to R
+cov_matrix <- as.matrix(read.table("2x/rmTrans/pcangsd_2x_rmTrans_unlinked500kb_v2.2.cov", header = F))
+head (cov_matrix)
+
+#Compute eigenvalues and eigenvectors for the cov matrix. 
+  #Eigenvalues are a measure of the size of the variance within a component. Large eigenvalues mean that component accounts for a large proportion of variance.
+  #Visually, eigenvalues are the length of the line. 
+  #Eigenvectors provide information on the relationship of each variable to each component. 
+eigen_pca1 <- eigen(cov_matrix)
+sum(eigen_pca1$values) #total variance in the dataset explained by all PCs
+
+#Calculate the proportion of total variance explained by each PC
+total_var <- eigen_pca1$values/sum(eigen_pca1$values)
+round(total_var, 3)
+
+#Variance explained by PC1 and PC2, rounded to 2 digits after comma
+pc1_var <- round(total_var[1] * 100, 2)
+pc1_var
+pc2_var <- round(total_var[2] * 100, 2)
+pc2_var
+
+#Calculate PCA scores for samples and plot it. I.e. eigenvectors scaled by the amount of variance. Each sample's position is adjusted according to its variance. 
+scores <- eigen_pca1$vectors %*% diag(sqrt(eigen_pca1$values)) 
+  #eigen_pca1$vectors - 26x26 matrix, where each column is an eigenvector
+  #diag(sqrt(eigen_pca1$values)) scales each eigenvector by the square root of tis eigenvalue
+  #stdev is square root of variance, and by multiplying a value by stdev we get magnitude and correct length, i.e. position on a plot
+plot(scores[,1], scores[,2], 
+     col = group_col, pch = 20, cex = 2.5,
+     xlab = paste0("PC1 (", pc1_var, "%)"), 
+     ylab = paste0("PC2 (", pc2_var, "%)")) 
+     main = "PCAscores; 2x, rmTrans, maf 0.02, iter 5000, n_eig default")
+legend("topright", legend = names(colour), col = colour, pch = 20, cex = 1)
+
+#Optional: Add sample IDs (in order as in bamlist) if you want to see which individuals are outliers
+ids <- c("HC90", "HC81", "HC23", "HC29", "HC85", "HC27", "HC33", 
+    "HC40", "HC32", "HC10", "ACH34", "ACH48", "ACH75", "HC38", "ACH80", "ACH72", 
+    "ACH31", "ACH15", "ACH16", "ACH32", "ACH17", "ACH18", "ACH20", "ACH28", "ACH26", "ACH27")
+text(x = scores[,1], 
+     y = scores[,2], 
+     labels = ids, 
+     pos = 2, cex = 0.8)
+
+
