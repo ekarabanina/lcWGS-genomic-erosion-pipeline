@@ -1,0 +1,58 @@
+# Estimating genotype likelihoods with ANGSD
+
+# See program description: https://www.popgen.dk/angsd/index.php/Genotype_Likelihoods
+
+# Program: ANGSD 0.940
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+#!/bin/bash
+#SBATCH --job-name=GL_2x
+#SBATCH --output=GL_2x_%j.txt
+#SBATCH --error=GL_2x_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=6G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+ref="/path/to/reference_genome.fna"
+bamlist="/path/to/bamlist" #bamlist is a text file, where each line is a full path to the bam file of the sample
+out_dir="/path/to/save/results"
+
+mkdir -p $out_dir
+
+echo "Loading angsd module..." #for csc
+module load angsd
+
+echo "Running angsd..."
+angsd -P 4 -bam $bamlist -ref $ref \
+-out $out_dir/gl_2x \
+-GL 1 -doGlf 2 \
+-remove_bads 1 -uniqueOnly 1 -only_proper_pairs 1 \
+-baq 1 -C 50 \
+-doMajorMinor 1 -doMaf 2 \
+-minMapQ 30 -minQ 20 \
+-minMaf 0.02 \
+-skipTriallelic 1 \
+-minInd 5 \
+-doCounts 1 \
+-setMinDepthInd 1 -setMaxDepthInd 8 \
+-SNP_pval 1e-6 \
+&> $out_dir/gl_2x.log
+
+echo "Done!"
+
+#if you want to run GL estimation excluding transitions, supply parameter -rmTrans 1
+
+#---------------------
+# Use of resources"
+#Nodes: 1
+#Cores per node: 4
+#CPU Efficiency: 83.83% of 2-11:43:24 core-walltime
+#Job Wall-clock time: 14:55:51
+#Memory Utilized: 4.56 GB
+
