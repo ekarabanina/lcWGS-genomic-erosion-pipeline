@@ -1,0 +1,116 @@
+# Realignment around indels with GATK IndelRealigner
+# Program: GATK v3.8.1.0
+# Requires two steps: (1) creating the target intervals and (2) realignment. 
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+######################################################################################
+## Step 1: Creating target intervals
+
+#!/bin/bash
+#SBATCH --job-name=indelreal_step1_RealignerTargetCreator
+#SBATCH --output=indelreal_step1_RealignerTargetCreator_out_%j.txt
+#SBATCH --error=indelreal_step1_RealignerTargetCreator_err_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=10G #5G is enough. if decreasing total memory, decrease java memory ("-Xmx8G")
+
+#Useful page with info: https://nodepit.com/node/de.helmholtz_muenchen.ibis.ngs.gatkrealignment.GATKRealignmentNodeFactory
+
+echo "Defining paths and variables"
+ref_genome="/path/to/reference_genome.fna"
+input_dir="/path/to/bam_files"
+out_dir="/path/to/save/results"
+gatk="/path/to/GenomeAnalysisTK.jar"
+
+mkdir -p $out_dir
+
+echo "Loading biojava module..." #for csc supercomputer
+module load biojava
+
+echo "Starting a for loop for RealignerTargetCreator for each sample"
+for bamfile in ${input_dir}/*.bam
+do
+echo "Extracting file name"
+filename=$(basename $bamfile .bam)
+
+echo "Processing sample: $filename"
+java -Xmx8G -jar $gatk \
+-T RealignerTargetCreator \
+-R $ref_genome \
+-I $bamfile \
+-o $out_dir/${filename}.intervals \
+-nt 4
+
+echo "Target indel intervals created for $filename!"
+done
+echo "All samples processed!"
+
+#---------------------
+# Use of resources:
+#Cores per node: 4
+#CPU Efficiency: 95.12% of 09:39:44 core-walltime
+#Job Wall-clock time: 02:24:56
+#Memory Utilized: 4.04 GB
+#Memory Efficiency: 40.35% of 10.00 GB
+
+######################################################################################
+## Step 2: Realignment
+
+#!/bin/bash
+#SBATCH --job-name=indelreal_step2_IndelRealigner
+#SBATCH --output=indelreal_step2_IndelRealigner_out_%j.txt
+#SBATCH --error=indelreal_step2_IndelRealigner_err_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=6G
+
+echo "Defining paths and variables"
+ref_genome="/path/to/reference_genome.fna"
+gatk="/path/to/GenomeAnalysisTK.jar"
+bam_dir="/path/to/bam_files"
+intervals_dir="path/to/intervals_from_step1"
+out_dir="/path/to/save/results"
+
+mkdir -p $out_dir
+
+echo "Loading biojava module..." #for csc
+module load biojava
+
+echo "Starting a for loop for RealignerTargetCreator for each sample"
+for bamfile in ${bam_dir}/*.bam
+do
+echo "Extracting file name"
+filename=$(basename $bamfile .bam)
+
+echo "Processing sample: $filename"
+java -Xmx4G -jar $gatk -T IndelRealigner \
+-R $ref_genome \
+-I $bamfile \
+-targetIntervals $intervals_dir/${filename}.intervals \
+-o $out_dir/${filename}_indelRealigned.bam
+
+echo "Realignment complete for $filename!"
+done
+echo "All samples processed!"
+
+#---------------------
+#Use of resources:
+#Job ID: 27811968
+#Cores: 1
+#CPU Efficiency: 97.30% of 23:58:59 core-walltime
+#Job Wall-clock time: 23:58:59
+#Memory Utilized: 2.32 GB
+#Memory Efficiency: 38.67% of 6.00 GB
+
+
+
+
