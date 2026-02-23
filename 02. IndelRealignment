@@ -103,7 +103,6 @@ echo "All samples processed!"
 
 #---------------------
 #Use of resources:
-#Job ID: 27811968
 #Cores: 1
 #CPU Efficiency: 97.30% of 23:58:59 core-walltime
 #Job Wall-clock time: 23:58:59
