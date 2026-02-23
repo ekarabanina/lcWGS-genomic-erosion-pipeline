@@ -2,10 +2,21 @@
 # The code requires a file with average sequencing depth per sample calculated beforehand (e.g.: Depth and breadth: https://github.com/ekarabanina/lcWGS-genomic-erosion-pipeline/blob/main/Depth%20and%20breadth). 
 # The idea is to calculate the fraction of reads from original file to retain in order ro achieve the target downsampled depth. 
 
+# Program: SAMtools
+
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
-# Program: SAMtools
-# Resources: mem=7M, cpus-per-task=1, ntasks=1; array job.
+#!/bin/bash
+#SBATCH --job-name=downsampling_array
+#SBATCH --output=downsampling_array_%A_%a.txt
+#SBATCH --error=downsampling_array_%A_%a.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=50M
+#SBATCH --array=1-26
 
 echo "Defining paths and variables..."
 input_list="/path/to/bamlist.txt"
@@ -37,3 +48,9 @@ samtools view -s ${seed}.${frac_part} -b $bamfile > $outbam
 
 echo "Completed for $filename"
 
+#---------------------
+# Use of resources for one job of the array: 
+#Cores: 1
+#CPU Efficiency: 99.48% of 00:03:13 core-walltime
+#Job Wall-clock time: 00:03:13
+#Memory Utilized: 6.55 MB
