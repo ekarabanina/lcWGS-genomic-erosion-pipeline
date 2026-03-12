@@ -1,7 +1,7 @@
 # Calculating sequencing depth (with standard deviation) and breadth of coverage.
 # Breadth of coverage means the proportion of the genome sequenced with at least 1x depth.
 
-# Program: SAMtools
+# Program: SAMtools v. 1.21
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
@@ -14,7 +14,7 @@ out_dir="/path/to/save/results"
 
 mkdir -p "$out_dir"
 
-echo "Loading biokit module..." #this is for csc.fi ; contains samtools
+echo "Loading biokit module..." #this is for csc.fi ; contains samtools v. 1.21
 module load biokit
 
 echo "Starting a for loop..."
