@@ -25,7 +25,7 @@ out_dir="/path/to/save/results"
 
 mkdir -p $out_dir
 
-echo "Loading angsd module..." #for csc
+echo "Loading angsd module..." #for csc, contains angsd v.0.940
 module load angsd
 
 echo "Running angsd..."
