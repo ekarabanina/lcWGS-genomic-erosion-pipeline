@@ -1,6 +1,6 @@
 # Runs of homozygosity (ROH) analysis with RZooROH. 
 
-# Programs: AWK, RZooROH, RStudio
+# Programs: AWK, RZooROH v.0.4.1, RStudio v.2025.05.0
 
 # RZooROH package description: Bertrand AR, Kadri NK, Flori L, Gautier M, Druet T. RZooRoH: An R package to characterize individual genomic autozygosity and identify homozygous-by-descent segments. Methods Ecol Evol. 2019; 10: 860–866. https://doi.org/10.1111/2041-210X.13167
 # Note that in RZooROH, the input file corresponding to ANGSD's genotype likelihoods format is called "genotype probability". 
