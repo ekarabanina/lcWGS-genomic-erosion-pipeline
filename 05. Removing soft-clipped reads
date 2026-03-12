@@ -1,5 +1,5 @@
 # Removing soft-clipped reads from sequences. This step was done for bam files containing only autosomes.
-# Programs: SAMtools, AWK
+# Programs: SAMtools v.1.21, AWK
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
@@ -21,7 +21,7 @@ out_dir="/path/to/save/results"
 
 mkdir -p $out_dir
 
-echo "Loading biokit module..." #for csc
+echo "Loading biokit module..." #for csc, contains samtools v.1.21
 module load biokit
 
 echo "Starting a for loop..."
