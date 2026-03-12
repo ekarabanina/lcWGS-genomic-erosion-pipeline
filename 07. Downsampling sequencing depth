@@ -3,7 +3,7 @@
 # The idea is to calculate the fraction of reads from original file to retain in order ro achieve the target downsampled depth. 
 # Note: after downsampling, perfrom indexing again (samtools index). 
 
-# Program: SAMtools
+# Program: SAMtools v.1.21
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
@@ -28,7 +28,7 @@ mkdir -p $out_dir
 
 seed=42  # fixed seed for reproducibility
 
-echo "Loading biokit module..." #this is for csc.fi ; contains samtools
+echo "Loading biokit module..." #this is for csc.fi, contains samtools v.1.21
 module load biokit
 
 echo "Starting an array job..."
