@@ -26,7 +26,7 @@ chromosomes="/path/to/chromosomes_list" #a text file, where each line is a name 
 
 mkdir -p $out_dir
 
-echo "Loading angsd module..." for csc
+echo "Loading angsd module..." for csc, contains angsd v.0.940
 module load angsd
 
 echo "Read chromosome..."
