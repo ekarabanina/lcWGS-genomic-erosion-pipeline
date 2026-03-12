@@ -1,8 +1,9 @@
 # Linkage disequilibrium (LD) pruning with ngsLD
 
 # Details on ngsLD: https://github.com/fgvieira/ngsLD; and the corresponding publication: Emma A Fox, Alison E Wright, Matteo Fumagalli, Filipe G Vieira, ngsLD: evaluating linkage disequilibrium using genotype likelihoods, Bioinformatics, Volume 35, Issue 19, October 2019, Pages 3855–3856, https://doi.org/10.1093/bioinformatics/btz200
+# Details on prune_graph: https://github.com/fgvieira/prune_graph
 
-# Programs: ngsLD, prune_graph, GAWK/AWK, RStudio
+# Programs: ngsLD, prune_graph, GAWK/AWK, RStudio v.2025.05.0
 
 # LD pruning was performed only on dataset excluding transitions.
 # Steps: 
