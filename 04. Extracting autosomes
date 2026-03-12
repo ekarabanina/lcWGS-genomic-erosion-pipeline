@@ -1,5 +1,5 @@
 # Extracting autosomes from BAM files
-# Program: SAMtools
+# Program: SAMtools v. 1.21
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
@@ -20,7 +20,7 @@ input_dir="/path/to/bam_files"
 out_dir="/path/to/save/results"
 chromosomes="NC_044004.1 NC_044005.1 NC_044006.1 NC_044007.1 NC_044008.1 NC_044009.1 NC_044010.1 NC_044011.1 NC_044012.1 NC_044013.1 NC_044014.1 NC_044015.1 NC_044016.1 NC_044017.1 NC_044018.1 NC_044019.1 NC_044020.1 NC_044021.1 NC_044022.1 NC_044023.1 NC_044024.1 NC_044025.1 NC_044026.1 NC_044027.1 NC_044028.1 NC_044029.1"
 
-echo "Loading biokit module..." #for csc
+echo "Loading biokit module..." #for csc, contains samtools v.1.21
 module load biokit
 
 echo "Starting a for loop..."
