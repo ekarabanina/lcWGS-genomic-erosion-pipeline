@@ -1,5 +1,5 @@
 # Sorting and indexing BAM files after manipulations (extracting auotosmes and removing soft-clipped reads).
-# Program: SAMtools
+# Program: SAMtools v.1.21
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
@@ -21,7 +21,7 @@ out_dir="/path/to/save/results"
 
 mkdir -p $out_dir
 
-echo "Loading biokit module..." #for csc
+echo "Loading biokit module..." #for csc, contains samtools v.1.21
 module load biokit
 
 for bamfile in $input_dir/*.bam
