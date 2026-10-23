@@ -15,13 +15,13 @@
 
 ######################################################################################
 ## Step 1: Create bamlists for each group/populaton
-Bamlist is a text document that contains full paths to bam files belonging to the group of interest (here, PRE, BOT, POST). It can be created, for example, using the ls -1 command:
+# Bamlist is a text document that contains full paths to bam files belonging to the group of interest (here, PRE, BOT, POST). It can be created, for example, using the ls -1 command:
 ls -1 /dir/*.bam > bamlist_PRE.txt
 
 
 ######################################################################################
 ## Step 2: Run doSaf per group.
-Below is the example for one of the groups. Similarly, analysis is done for all other groups.
+# Below is the example for one of the groups. Similarly, analysis is done for all other groups.
 
 !/bin/bash
 #SBATCH --job-name=doSaf_all_autosomes_bamlist_PRE
@@ -56,7 +56,7 @@ echo "Done!"
 
 ######################################################################################
 ## Step 3: Run realSFS to calculate 2-dimensional site frequency spectrum (SFS) for each group pair.
-Below is the example for one pairwise comparison. Similarly, analysis is done for all other group comparisons.
+# Below is the example for one pairwise comparison. Similarly, analysis is done for all other group comparisons.
 
 #!/bin/bash
 #SBATCH --job-name=realsfs_PRE-BOT
@@ -88,7 +88,7 @@ echo "Done!"
 ## Step 4: Run realSFS fst index to calculate Fst binary files for each group pair and PBS across three groups.
 
 ## FST
-Below is the example for one pairwise comparison. Similarly, analysis is done for all other group comparisons.
+# Below is the example for one pairwise comparison. Similarly, analysis is done for all other group comparisons.
 
 #!/bin/bash
 #SBATCH --job-name=fstIndex_PRE-BOT
@@ -158,7 +158,7 @@ echo "Done!"
 ## Step 5: Run realSFS fst stats to extract Fst and PBS from binary files. Here, in non-overlapping windows (using stats2 option).
 
 # FST
-Below is the example for one pairwise comparison. Similarly, analysis is done for all other group comparisons.
+# Below is the example for one pairwise comparison. Similarly, analysis is done for all other group comparisons.
 
 #!/bin/bash
 #SBATCH --job-name=fstIndex_PRE-BOT_1_stats
@@ -223,7 +223,7 @@ library(dplyr)
 
 #---------------------------------------------------------------------------------------------------------------
 ## FST
-Below the script is for one group pair (PRE-BOT). Similarly, analysis is done for all other group pairs.
+# Below the script is for one group pair (PRE-BOT). Similarly, analysis is done for all other group pairs.
 
 ## Part 1: Loading and inspecting data
 # Load and inspect data
@@ -290,7 +290,7 @@ weighted_pbs_POST
 
 ######################################################################################
 ## Step 7: Plot PBS distributions as Manhattan plots in R (PBS values vs genomic position). 
-Below the script is only for PRE group. Similarly, plotting is done for all other groups.
+# Below the script is only for PRE group. Similarly, plotting is done for all other groups.
 
 # If you are not following the calculations in Step 6 above, load libraries and data to R.
 install.packages("ggplot2","dplyr")
