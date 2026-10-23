@@ -1,0 +1,243 @@
+# Estimating thetas (nucleotide diversity, Watterson's theta, and Tajima's D) with ANGSD
+
+# Programs: ANGSD 0.940, RStudio
+
+# Steps:
+# 1. Create bamlists for each group/populaton
+# 2. Run doSaf per group
+# 3. Calculate SFS for each group pair (realSFS)
+# 4. Calculate per-site thetas (saf2theta)
+# 5. Calculate neutrality test statistics (thetaStat)
+# 6. Calculate weighted thetas, plot, and do statistical comparisons of groups in R
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+######################################################################################
+## Step 1: Create bamlists for each group/populaton
+# Bamlist is a text document that contains full paths to bam files belonging to the group of interest (here, PRE, BOT, POST). It can be created, for example, using the ls -1 command:
+ls -1 /dir/*.bam > bamlist_PRE.txt
+
+
+######################################################################################
+## Step 2: Run doSaf per group.
+# Below is the example for one of the groups. Similarly, analysis is done for all other groups.
+
+!/bin/bash
+#SBATCH --job-name=doSaf_all_autosomes_bamlist_PRE
+#SBATCH --output=doSaf_all_autosomes_bamlist_PRE_%j.txt
+#SBATCH --error=doSaf_all_autosomes_bamlist_PRE_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=5G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+ref="/path/to/reference_genome.fna"
+bamlist="/path/to/bamlist_PRE.txt"
+out_dir="/path/to/save/results"
+
+echo "Loading angsd module..."
+module load angsd
+
+echo "Running -doSaf..."
+angsd -P 10 -bam $bamlist -anc $ref -ref $ref \
+-out $out_dir/doSaf_bamlist_PRE \
+-GL 1 -doSaf 1 \
+-remove_bads 1 -uniqueOnly 1 -only_proper_pairs 1 \
+-baq 1 -C 50 \
+-minMapQ 30 -minQ 20 \
+&> $out_dir/doSaf_bamlist_PRE.log
+
+echo "Done!"
+
+######################################################################################
+## Step 3: Run realSFS to calculate 2-dimensional site frequency spectrum (SFS) for each group pair.
+# Below is the example for one pairwise comparison. Similarly, analysis is done for all other group comparisons.
+
+#!/bin/bash
+#SBATCH --job-name=realsfs_PRE-BOT
+#SBATCH --output=realsfs_PRE-BOT_%j.txt
+#SBATCH --error=realsfs_PRE-BOT_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=150G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+input_dir="/path/to/doSaf_files" #produced in Step 2 above.
+out_dir="/path/to/save/results"
+
+echo "Loading angsd module..."
+module load angsd
+
+echo "Running realSFS..."
+realSFS -cores 10 -fold 1 \
+$input_dir/PRE/doSaf_bamlist_PRE.saf.idx $input_dir/BOT/doSaf_bamlist_BOT.saf.idx > $out_dir/realsfs_PRE-BOT.ml \
+2> $out_dir/realsfs_PRE-BOT.errors
+
+echo "Done!"
+
+######################################################################################
+## Step 4: Calculate per-site thetas (saf2theta) per group.
+# Below is the example for one group. Similarly, analysis is done for all other groups.
+#!/bin/bash
+#SBATCH --job-name=saf2theta_PRE
+#SBATCH --output=saf2theta_PRE_%j.txt
+#SBATCH --error=saf2theta_PRE_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=2G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+input_dir="/path/to/doSaf_files" #produced in Step 2 above.
+out_dir="/path/to/save/results"
+
+echo "Loading angsd module..."
+module load angsd
+
+echo "Running realSFS..."
+realSFS saf2theta \
+$input_dir/PRE/doSaf_PRE.saf.idx \
+-sfs $input_dir/PRE/realsfs_PRE.ml \
+-outname $out_dir/PRE/saf2theta_PRE \
+2> $out_dir/PRE/saf2theta_PRE.log
+
+echo "Done!"
+
+# Analysis time for the settings specified above: 25 min.
+
+######################################################################################
+## Step 5. Calculate neutrality test statistics (thetaStat)
+# Below is the example for one group. Similarly, analysis is done for all other groups. Calculations were done per chromosome, instead of windows.
+
+#!/bin/bash
+#SBATCH --job-name=thetaStat_PRE
+#SBATCH --output=thetaStat_PRE_%j.txt
+#SBATCH --error=thetaStat_PRE_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=02:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=1500M
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+theta="/path/to/thetas.idx/files" #produced in Step 4 above.
+
+echo "Loading angsd module..."
+module load angsd
+
+echo "Running realSFS.."
+thetaStat do_stat $theta/PRE/saf2theta_PRE.thetas.idx \
+-outnames $theta/PRE/thetaStat_PRE \
+2> $theta/PRE/thetaStat_PRE.log
+
+echo "Done!"
+
+# Analysis time for the settings specified above: 3 min.
+
+
+######################################################################################
+## Step 6. Calculate weighted thetas, plot, and do statistical comparisons of groups in R
+# The output file from angsd (Step 5 above; .pestPG file) contains various theta estimates per chromosome. 
+# I prepared the file for R analyses by selecting estimates of interest for my analysis: chromosome, winCenter, Watterson's theta (tW), nucletide diversity (tP), Tajima, and number of sites.
+# In addition, in Excel, I calculated tW and tP per site (by dividing the chromosome-level theta by number of sites in the chromosome), and added these values to new columns. 
+# Then, I combined results from all three groups (PRE, BOT, POST) to the same file, and added a column that defined the group. This file was loaded to 
+
+## Part 1: Loading and inspecting data
+thetas <- read.csv("thetas_sorted_2x.csv", header = TRUE, sep = ";")
+str(thetas)
+head(thetas)
+aggregate(thetas$tWpersite, by = list(thetas$Group), summary)
+aggregate(thetas$tPpersite, by = list(thetas$Group), summary)
+aggregate(thetas$Tajima, by = list(thetas$Group), summary)
+
+#---------------------------------------------------------------------------------------------------------------
+## Part 2: Examinging data distribution (normality)
+#There are two common normality tests: the Kolmogorov-Smirnov (KS) and Shapiro-Wilk test. 
+#The Shapiro-Wilk test is preferred for small samples (n is less than or equal to 50). 
+#For larger samples, the Kolomogrov-Smirnov test is recommended.
+
+# PRE
+tWs_PRE <- thetas$tWpersite [thetas$Group == "PRE"]
+shapiro.test(tWs_PRE)
+tPs_PRE <- thetas$tPpersite [thetas$Group == "PRE"]
+shapiro.test(tPs_PRE) #not significant -> normal
+tajima_PRE <- thetas$Tajima [thetas$Group == "PRE"]
+shapiro.test(tajima_PRE) #not significant -> normal
+
+# BOT
+tWs_BOT <- thetas$tWpersite [thetas$Group == "BOT"]
+shapiro.test(tWs_BOT)
+tPs_BOT <- thetas$tPpersite [thetas$Group == "BOT"]
+shapiro.test(tPs_BOT)
+tajima_BOT <- thetas$Tajima [thetas$Group == "BOT"]
+shapiro.test(tajima_BOT)
+
+# POST
+tWs_POST <- thetas$tWpersite [thetas$Group == "POST"]
+shapiro.test(tWs_POST)
+tPs_POST <- thetas$tPpersite [thetas$Group == "POST"]
+shapiro.test(tPs_POST)
+tajima_POST <- thetas$Tajima [thetas$Group == "POST"]
+shapiro.test(tajima_POST)
+
+#---------------------------------------------------------------------------------------------------------------
+# Part 3: Estimate average (or median for non-normal distribution) weighted by number of sites
+nSites_PRE <- thetas$nSites [thetas$Group == "PRE"]
+nSites_BOT <- thetas$nSites [thetas$Group == "BOT"]
+nSites_POST <- thetas$nSites [thetas$Group == "POST"]
+
+# PRE
+tPs_weighed_PRE <- sum(tPs_PRE * nSites_PRE)/sum(nSites_PRE)
+tPs_weighed_PRE
+tWs_weighed_PRE <- sum(tWs_PRE * nSites_PRE)/sum(nSites_PRE)
+tWs_weighed_PRE
+
+# BOT
+tPs_weighed_BOT <- sum(tPs_BOT * nSites_BOT)/sum(nSites_BOT)
+tPs_weighed_BOT
+tWs_weighed_BOT <- sum(tWs_BOT * nSites_BOT)/sum(nSites_BOT)
+tWs_weighed_BOT
+
+# POST
+tPs_weighed_POST <- sum(tPs_POST * nSites_POST)/sum(nSites_POST)
+tPs_weighed_POST
+tWs_weighed_POST <- sum(tWs_POST * nSites_POST)/sum(nSites_POST)
+tWs_weighed_POST
+
+#---------------------------------------------------------------------------------------------------------------
+# Part 4: Perform Friedman test for simultaneous comparison of three groups.
+# Friedman test is used to compare multiple groups, non-parametric data, but dependent variables (i.e. paired) - here, to account for the same chromosomes in each group.
+# Watterson's theta
+friedman.test(tWpersite ~ Group | Chr, data = thetas)
+
+# Pairwise nucleotide diversity
+friedman.test(tPpersite ~ Group | Chr, data = thetas)
+
+# Tajima's D
+friedman.test(Tajima ~ Group | Chr, data = thetas)
+
+#The results for Friedman were the same, because the pattern across chromosomes remains for all three estimators. 
+#Check correlation between parameters. 
+cor(thetas$tWpersite, thetas$tPpersite) #strong positive correlation
+cor(thetas$tWpersite, thetas$Tajima) #strong negative correlation
+cor(thetas$tPpersite, thetas$Tajima) #strong negative correlation
+
+
+
+
+
+
+
