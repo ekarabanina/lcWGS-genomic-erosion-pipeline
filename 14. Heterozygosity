@@ -60,8 +60,7 @@ echo "Done!"
 
 ######################################################################################
 ## Step 2: Create a list with paths to produced Saf files
-A list should contain full paths to saf files (.saf.idx) produced in Step 1, so that one file is on one line. 
-For example, using the ls -1 command:
+# A list should contain full paths to saf files (.saf.idx) produced in Step 1, so that one file is on one line. For example, using the ls -1 command:
 ls -1 /dir/*.saf.idx > safFiles_list.txt
 
 ######################################################################################
@@ -96,8 +95,7 @@ echo "$(date): Finished $sample!"
 
 ######################################################################################
 ## Step 4: Merge output files from realSFS to one file
-The output from Step 3 created .ml files for each sample. These should be merged to be imported to R.
-For example, merging can be done with cat command
+# The output from Step 3 created .ml files for each sample. These should be merged to be imported to R. For example, merging can be done with cat command:
 cat *.ml > all_v2.ml
 
 
@@ -206,7 +204,7 @@ MWT_PRE_BOT = wilcox.test(het_PRE, het_BOT, exact = FALSE)
 print (MWT_PRE_BOT)
 #Exact distribution is better for small sample sizes (n<50). Normal distribution will have a standard deviation of around 7-8, and if sample size is small it can cause issues if the data has strange values. That is because st dev depends on sample size and not the actual values. 
 #By default (if exact is not specified), an exact p-value is computed if the samples contain less than 50 finite values and there are no ties. Otherwise, a normal approximation is used.
-# Using normal approximation and continuity correction (i.e. exact=FALSE). This should result in more precise p-values.
+#Using normal approximation and continuity correction (i.e. exact=FALSE). This should result in more precise p-values.
 
 # PRE-POST
 MWT_PRE_POST = wilcox.test(het_PRE, het_POST, exact=FALSE)
