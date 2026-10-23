@@ -2,9 +2,229 @@
 
 # Programs: ANGSD 0.940, RStudio
 
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
 # Steps:
 # 1. Run doSaf per sample
-# 2. Run realSFS per sample with 100 bootstrap replications
-# 3. Merge output files from realSFS to one file
-# 4. Plot and calculate in R
+# 2. Create a list with paths to Saf files
+# 3. Run realSFS per sample with 100 bootstrap replications
+# 4. Merge output files from realSFS to one file
+# 5. Do calculations, statistics, and plotting in R
+
+######################################################################################
+## Step 1: Run doSaf per sample
+#!/bin/bash
+#SBATCH --job-name=doSaf_2x_persample
+#SBATCH --output=doSaf_2x_persample_%j.txt
+#SBATCH --error=doSaf_2x_persample_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=1G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+ref="/path/to/reference_genome.fna"
+input_dir="/path/to/bamfiles"
+out_dir="/path/to/save/results"
+
+echo "Loading angsd module..."
+module load angsd
+
+for bamfile in $input_dir/*.bam
+do
+sample=$(basename $bamfile _2x.bam)
+
+echo "Running -doSaf for $sample..."
+angsd -P 8 -i $bamfile -anc $ref -ref $ref \
+-out $out_dir/doSaf_2x_${sample} \
+-GL 1 -doSaf 1 \
+-remove_bads 1 -uniqueOnly 1 -only_proper_pairs 1 \
+-baq 1 -C 50 \
+-minMapQ 30 -minQ 20 \
+-doCounts 1 \
+-setMinDepthInd 1 -setMaxDepthInd 8 \
+&> $out_dir/doSaf_2x_${sample}.log
+
+if [ $? -eq 0 ]; then
+echo "$sample processed successfully"
+else
+echo "Error processing $sample"
+fi
+
+done
+
+echo "Done!"
+
+######################################################################################
+## Step 2: Create a list with paths to produced Saf files
+A list should contain full paths to saf files (.saf.idx) produced in Step 1, so that one file is on one line. 
+For example, using the ls -1 command:
+ls -1 /dir/*.saf.idx > safFiles_list.txt
+
+######################################################################################
+## Step 3: Run realSFS per sample with 100 bootstrap replications
+#!/bin/bash
+#SBATCH --job-name=realsfs_2x_persample_array
+#SBATCH --output=realsfs_2x_persample_array_%A_%a.txt
+#SBATCH --error=realsfs_2x_persample_array_%A_%a.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=20
+#SBATCH --mem=40G
+#SBATCH --array=1-26
+
+echo "Defining paths and variables..."
+dir="/path/to/output/dir"
+safFiles="/path/to/safFiles_list.txt" #from Step 2 above
+
+echo "Loading angsd module..."
+module load angsd
+
+safFile=$(sed -n "${SLURM_ARRAY_TASK_ID}p" $safFiles)
+sample=$(basename "$safFile" .saf.idx | sed 's/^doSaf_2x_//')
+
+echo "$(date): Running realSFS for $sample..."
+realSFS -cores 20 -fold 1 -bootstrap 100 $safFile 2> $dir/realsfs_2x_${sample}.errors.log | \
+awk -v sample=$sample '{print sample, $0}' > $dir/realsfs_2x_${sample}.ml
+
+echo "$(date): Finished $sample!"
+
+######################################################################################
+## Step 4: Merge output files from realSFS to one file
+The output from Step 3 created .ml files for each sample. These should be merged to be imported to R.
+For example, merging can be done with cat command
+cat *.ml > all_v2.ml
+
+
+######################################################################################
+## Step 5: Calculate heterozygosity, plot, and perform statistical comparisons in RStudio.
+
+## Part 1: Calculating heterozygosity per sample
+# Set working directory
+setwd("/path/to/workdir")
+
+# Install and load packages
+install.packages("dplyr", "ggplot2", "scales")
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+# Load and explore data
+all_sfs_v2 <- read.table("all_v2.ml", header = FALSE, sep = "")
+str(all_sfs_v2)
+head(all_sfs_v2)
+
+# Add column names
+colnames(all_sfs_v2) <- c("Sample", "HomRef", "Het", "HomAlt")
+head(all_sfs_v2)
+
+# Calculate heterozygosity for each sample
+het_table_v2 <- all_sfs_v2 %>%
+  mutate(Heterozygosity = Het / (HomRef + Het + HomAlt)) %>%
+  select(Sample, Heterozygosity)
+head(het_table_v2)
+
+#Calculate heterozygosity per sample with different error estimators (st dev, st error, 95% confidence intervals)
+het_summary <- het_table_v2 %>%
+  group_by(Sample) %>%
+  summarise (
+    mean_het = mean(Heterozygosity), #calculates mean heterozygosity per sample
+    stdev_het = sd(Heterozygosity), #calculates standard deviation (spread of data around its mean)
+    sterr_het = stdev_het / sqrt(n()) #calculates the uncertainty of the estimated mean
+  )
+head(het_summary)
+
+# Save the table
+write.table(het_summary, "heterozygosity_2x_100boots_stats.csv", row.names = FALSE, quote = FALSE, sep = "\t")
+
+#----------------------------------------------------------------------------------------------------
+## Part 2: Plot (violin plots with box plots, where average values are marked in addition to medians).
+# For plotting heterozygosity across groups, I created a new table, which, in addition to sample names and heterozygosity caluclations from above, included columns with group assignment (PRE, BOT, POST), and years of samples. I called this table "heterozygosity_v2_forR.csv"
+het_groups <- read.csv("heterozygosity_v2_forR.csv", header = TRUE, sep = ";")
+head (het_groups)
+colour <- c("POST" = "#440154", "BOT" = "#FFDD44", "PRE" = "#21918c")
+het_groups$Group <- factor(het_groups$Group, levels = c("PRE", "BOT", "POST" ))
+
+ggplot(het_groups, aes(x = Group, y = mean_het)) +
+  geom_violin(aes(fill = Group), alpha = 0.6, trim = FALSE) +
+  geom_boxplot(width = 0.1, outlier.shape = NA , alpha = 0.9) +
+  stat_summary(fun = mean, geom = "point", 
+               shape = 8, size = 3, colour = "red") + 
+  geom_point(colour = "black", size = 1.7, position = position_jitter(width = 0.07)) +
+  scale_fill_manual(values = colour, name = "Time period") +
+  labs(x = NULL, 
+       y = "Individual genome-wide heterozygosity",
+       title = "Full depth") +
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.0001)) + #optional line to display heterozygosity in non-scientific format
+  theme_minimal() +
+  theme(
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.position = "none",
+    panel.grid.major.x = element_blank())
+
+#----------------------------------------------------------------------------------------------------
+## Part 3: Perform statistical comparison of heterozygosity between groups
+# Load the data (if needed again)
+het_groups <- read.csv("heterozygosity_2x_forR.csv", header = TRUE, sep = ";")
+het_groups
+
+# Check if data has normal distribution or not. There are two common normality tests: the Kolmogorov-Smirnov (KS) and Shapiro-Wilk test. 
+#The Shapiro-Wilk test is preferred for small samples (n is less than or equal to 50). 
+#For larger samples, the Kolomogrov-Smirnov test is recommended.
+
+shapiro.test(het_groups$mean_het)
+#if the test is significant, the distribution is non-normal. Here, it is significant.
+
+# Assign datasets and calculate mean and median per group
+het_PRE <- het_groups$mean_het [het_groups$Group == "PRE"]
+het_PRE
+mean(het_PRE)
+median(het_PRE)
+
+het_BOT <- het_groups$mean_het  [het_groups$Group == "BOT"]
+het_BOT
+mean(het_BOT)
+median(het_BOT)
+
+het_POST <- het_groups$mean_het  [het_groups$Group == "POST"]
+het_POST
+mean(het_POST)
+median(het_POST)
+
+# Perform Kruskal-Wallis test for simultaneous comparison of three groups. Kruskal-Wallis test is used for multiple independent group and non-parametric data
+kruskal.test(list(het_PRE, het_BOT, het_POST))
+
+# Perform Mann-Whitney U test (=Wilcox sum rank test) for pairwise comparison. Mann-Whitney U test is used for comparing 2 independent groups and data with non-normal distribution
+# PRE-BOT
+MWT_PRE_BOT = wilcox.test(het_PRE, het_BOT, exact = FALSE)
+print (MWT_PRE_BOT)
+#Exact distribution is better for small sample sizes (n<50). Normal distribution will have a standard deviation of around 7-8, and if sample size is small it can cause issues if the data has strange values. That is because st dev depends on sample size and not the actual values. 
+#By default (if exact is not specified), an exact p-value is computed if the samples contain less than 50 finite values and there are no ties. Otherwise, a normal approximation is used.
+# Using normal approximation and continuity correction (i.e. exact=FALSE). This should result in more precise p-values.
+
+# PRE-POST
+MWT_PRE_POST = wilcox.test(het_PRE, het_POST, exact=FALSE)
+print (MWT_PRE_POST)
+
+# BOT-POST
+MWT_BOT_POST = wilcox.test(het_BOT, het_POST, exact=FALSE)
+print (MWT_BOT_POST)
+
+# Calculate delta estimator of heterozygosty (deltaH) from Diez-Del-Molino et al. 2018
+# Absolute delta = het_POST - het_PRE
+abs_delta <- median(het_POST) - median(het_PRE)
+abs_delta
+  
+# Relative delta: DeltaH = ((median het of current pop) - (median het of old pop))/(median het of old pop)
+relative_delta <-  (median(het_POST) - median(het_PRE))/(median(het_PRE)) * 100
+relative_delta
+
+
+  
 
