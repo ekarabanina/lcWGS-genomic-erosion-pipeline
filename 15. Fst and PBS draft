@@ -1,4 +1,4 @@
-# Estimating Fst and opulation branch statistics (PBS) with ANGSD
+# Estimating Fst and population branch statistics (PBS) with ANGSD
 
 # Programs: ANGSD 0.940, RStudio
 
@@ -8,4 +8,342 @@
 # 3. Calculate 2-dimensional site frequency spectrum (SFS) for each group pair (realSFS)
 # 4. Calculate Fst binary files (realSFS)
 # 5. Extract Fst from binary files (realSFS)
-# 6. Calculate weighted Fst and PBS in R (+statistical tests)
+# 6. Calculate weighted Fst and PBS in R
+# 7. Plot PBS distributions as Manhattan plots in R
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+######################################################################################
+## Step 1: Create bamlists for each group/populaton
+Bamlist is a text document that contains full paths to bam files belonging to the group of interest (here, PRE, BOT, POST). It can be created, for example, using the ls -1 command:
+ls -1 /dir/*.bam > bamlist_PRE.txt
+
+
+######################################################################################
+## Step 2: Run doSaf per group.
+Below is the example for one of the groups. Similarly, analysis is done for all other groups.
+
+!/bin/bash
+#SBATCH --job-name=doSaf_all_autosomes_bamlist_PRE
+#SBATCH --output=doSaf_all_autosomes_bamlist_PRE_%j.txt
+#SBATCH --error=doSaf_all_autosomes_bamlist_PRE_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=5G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+ref="/path/to/reference_genome.fna"
+bamlist="/path/to/bamlist_PRE.txt"
+out_dir="/path/to/save/results"
+
+echo "Loading angsd module..."
+module load angsd
+
+echo "Running -doSaf..."
+angsd -P 10 -bam $bamlist -anc $ref -ref $ref \
+-out $out_dir/doSaf_bamlist_PRE \
+-GL 1 -doSaf 1 \
+-remove_bads 1 -uniqueOnly 1 -only_proper_pairs 1 \
+-baq 1 -C 50 \
+-minMapQ 30 -minQ 20 \
+&> $out_dir/doSaf_bamlist_PRE.log
+
+echo "Done!"
+
+######################################################################################
+## Step 3: Run realSFS to calculate 2-dimensional site frequency spectrum (SFS) for each group pair.
+Below is the example for one pairwise comparison. Similarly, analysis is done for all other group comparisons.
+
+#!/bin/bash
+#SBATCH --job-name=realsfs_PRE-BOT
+#SBATCH --output=realsfs_PRE-BOT_%j.txt
+#SBATCH --error=realsfs_PRE-BOT_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=150G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+input_dir="/path/to/doSaf_files" #produced in Step 2 above.
+out_dir="/path/to/save/results"
+
+echo "Loading angsd module..."
+module load angsd
+
+echo "Running realSFS..."
+realSFS -cores 10 -fold 1 \
+$input_dir/PRE/doSaf_bamlist_PRE.saf.idx $input_dir/BOT/doSaf_bamlist_BOT.saf.idx > $out_dir/realsfs_PRE-BOT.ml \
+2> $out_dir/realsfs_PRE-BOT.errors
+
+echo "Done!"
+
+######################################################################################
+## Step 4: Run realSFS fst index to calculate Fst binary files for each group pair and PBS across three groups.
+
+## FST
+Below is the example for one pairwise comparison. Similarly, analysis is done for all other group comparisons.
+
+#!/bin/bash
+#SBATCH --job-name=fstIndex_PRE-BOT
+#SBATCH --output=fstIndex_PRE-BOT_%j.txt
+#SBATCH --error=fstIndex_PRE-BOT_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=3G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+input_saf="/path/to/doSaf_files" #produced in Step 2 above.
+input_ml="/path/to/ml/file" #produced per group pair in Step 3 above
+out_dir="/path/to/save/results"
+
+echo "Loading angsd module..."
+module load angsd
+
+echo "Running realSFS..."
+realSFS fst index -cores 2 -fold 1 \
+$input_saf/PRE/doSaf_bamlist_PRE.saf.idx $input_saf/BOT/doSaf_bamlist_BOT.saf.idx \
+-sfs $input_ml/realsfs_PRE-BOT.ml \
+-fstout $out_dir/fst_PRE-BOT \
+2> $out_dir/fstIndex_PRE-BOT.errors
+
+echo "Done!"
+
+#---------------------------------------------------------------------------------------------------------------
+## PBS
+#!/bin/bash
+#SBATCH --job-name=pbs
+#SBATCH --output=pbs_%j.txt
+#SBATCH --error=pbs_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=24:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=3G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+input_ml="/path/to/ml/file" #produced per group pair in Step 3 above
+out_dir="/path/to/save/results"
+
+echo "Loading angsd module..."
+module load angsd
+
+echo "Running realSFS..."
+realSFS fst index -fold 1 \
+$input_dir/PRE/doSaf_PRE.saf.idx \
+$input_dir/BOT/doSaf_BOT.saf.idx \
+$input_dir/POST/doSaf_POST.saf.idx \
+-sfs $input_dir/realsfs_PRE-BOT.ml \
+-sfs $input_dir/realsfs_PRE-POST.ml \
+-sfs $input_dir/realsfs_BOT-POST.ml \
+-fstout $out_dir/pbs \
+2> $out_dir/pbs.errors
+
+echo "Done!"
+
+
+######################################################################################
+## Step 5: Run realSFS fst stats to extract Fst and PBS from binary files. Here, in non-overlapping windows (using stats2 option).
+
+# FST
+Below is the example for one pairwise comparison. Similarly, analysis is done for all other group comparisons.
+
+#!/bin/bash
+#SBATCH --job-name=fstIndex_PRE-BOT_1_stats
+#SBATCH --output=fstIndex_PRE-BOT_1_stats_%j.txt
+#SBATCH --error=fstIndex_PRE-BOT_1_stats_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=500M
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+dir="/path/to/fst/files" #produced in Step 4 above.
+
+echo "Loading angsd module..."
+module load angsd
+
+echo "Running realSFS..."
+realSFS fst stats2 $dir/fst_PRE-BOT.fst.idx -win 20000 -step 20000 &> $dir/fstIndex_PRE-BOT_stats.log
+
+echo "Done!"
+
+#---------------------------------------------------------------------------------------------------------------
+## PBS
+#!/bin/bash
+#SBATCH --job-name=pbs_stats2
+#SBATCH --output=pbs_stats2_%j.txt
+#SBATCH --error=pbs_stats2_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=02:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=1G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+dir="/path/to/pbs/file" #produced in Step 4 above.
+
+echo "Loading angsd module..."
+module load angsd
+
+echo "Running realSFS..."
+realSFS fst stats2 $dir/pbs.fst.idx -win 20000 -step 20000 \
+> $dir/pbs_stats2_2x.txt \
+2> $dir/pbs_stats2_2x.log
+
+echo "Done!"
+
+# NOTE: The commands above will create a text file with results. Columns: region, chromosome, midPost, Nsites, Fst and/or PBS. Each row is a window. If I remember correctly, last column, containing Fst values is not named for some reason. So, before loading the file to R, name it.
+
+
+######################################################################################
+## Step 6: Calculate weighted Fst and PBS in R, plot PBS
+
+# Install and load packages
+install.packages("ggplot2","dplyr")
+library(ggplot2)
+library(dplyr)
+
+#---------------------------------------------------------------------------------------------------------------
+## FST
+Below the script is for one group pair (PRE-BOT). Similarly, analysis is done for all other group pairs.
+
+## Part 1: Loading and inspecting data
+# Load and inspect data
+fst_PRE_BOT <- read.table("fst_stats2_PRE-BOT.txt", header = TRUE)
+head(fst_PRE_BOT)
+
+# Plot distribution of Fst values
+hist(
+  fst_PRE_BOT$Fst,
+  breaks = 30,
+  main = "Distribution of Fst values (PRE-BOT)",
+  xlab = "Fst",
+  col = "grey80",
+  border = "grey40"
+)
+
+# Check if there are windows with very few sites
+range(fst_PRE_BOT$Nsites)
+sum(fst_PRE_BOT$Nsites < 100) #how many windows have less than 100 sites
+
+# Show lines with low Nsites, check if Fst values are outliers
+summary(fst_PRE_BOT$Fst) #check distribution of Fst values
+subset(fst_PRE_BOT, Nsites < 100) #here the values are ok, so we can keep them
+
+
+## Part 2: Calculating weighted mean Fst
+#PRE-BOT
+weighted_Fst_PRE_BOT <- sum(fst_PRE_BOT$Fst * fst_PRE_BOT$Nsites) / sum(fst_PRE_BOT$Nsites)
+weighted_Fst_PRE_BOT
+
+#alternatively, use R's function "weighted.mean":
+weighted_Fst_PRE_BOT <- weighted.mean(fst_PRE_BOT$Fst, fst_PRE_BOT$Nsites)
+weighted_Fst_PRE_BOT
+
+
+#---------------------------------------------------------------------------------------------------------------
+## PBS
+## Part 1: Loading and inspecting data
+pbs <- read.table("pbs_stats2_2x.txt", header = TRUE)
+head(pbs)
+
+#Check high PBS positions
+range (pbs$PBS0) #for PRE
+range (pbs$PBS1) #for BOT
+range (pbs$PBS2) #for POST
+
+pbs_PRE_high <- subset(pbs, pbs$PBS0 > 0.10)
+write.table(pbs_PRE_high, "pbs_PRE_2x_over0.10.csv", row.names = FALSE, sep = ";")
+pbs_POST_high <- subset(pbs, pbs$PBS2 > 0.10)
+write.table(pbs_POST_high, "pbs_POST_2x_over0.10.csv", row.names = FALSE, sep = ";")
+
+
+## Part 2: Calculating weighted mean PBS values
+weighted_pbs_PRE <- weighted.mean(pbs$PBS0, pbs$Nsites)
+weighted_pbs_PRE
+sum(pbs$PBS0*pbs$Nsites)/sum(pbs$Nsites) #manual calculation
+
+weighted_pbs_BOT <- weighted.mean(pbs$PBS1, pbs$Nsites)
+weighted_pbs_BOT
+
+weighted_pbs_POST <- weighted.mean(pbs$PBS2, pbs$Nsites)
+weighted_pbs_POST
+
+
+######################################################################################
+## Step 7: Plot PBS distributions as Manhattan plots in R (PBS values vs genomic position). 
+Below the script is only for PRE group. Similarly, plotting is done for all other groups.
+
+# If you are not following the calculations in Step 6 above, load libraries and data to R.
+install.packages("ggplot2","dplyr")
+library(ggplot2)
+library(dplyr)
+pbs <- read.table("pbs_stats2_2x.txt", header = TRUE)
+head(pbs)
+
+# Shift each chromosome along the X axis, so they are adjacent to each other and not overlapping
+# First, get length of each chromosome
+chr_lengths_pbs <- pbs %>% 
+  group_by(chr) %>% 
+  summarise(chr_len = max(midPos)) #as approx. chromosome length
+head(chr_lengths_pbs)
+
+# Make sure that the chromosomes start one after another
+chr_lengths_pbs <- chr_lengths_pbs %>% 
+  mutate(chr_start = lag(cumsum(chr_len), default = 0))
+head(chr_lengths_pbs)
+
+# Add starting chr positions to the data table (here, name fst_plot)
+pbs_plot <- pbs %>% 
+  left_join(chr_lengths_pbs, by = "chr") %>% 
+  mutate(cumPos = midPos + chr_start)
+head(pbs_plot)
+
+# Change chr names to 1,2,3...26
+pbs_plot$chr_num <- as.numeric(factor(pbs_plot$chr)) 
+
+# Make labels of chromosome numbers for plotting
+chr_labels_pbs <- pbs_plot %>%
+  group_by(chr_num) %>%
+  summarise(mid = mean(cumPos))
+
+# Some pbs values are negative, so for plotting I will make them zero
+pbs_plot$PBS0[pbs_plot$PBS0 < 0] <- 0
+
+# Add a threshold. For example, as four standard deviations above the mean:
+mean_pbs0 <- mean(pbs_plot$PBS0)
+sd_pbs0   <- sd(pbs_plot$PBS0)
+threshold_pbs0 <- mean_pbs0 + 4 * sd_pbs0  # 4 SD above mean
+threshold_pbs0
+
+# Plot
+ggplot(pbs_plot, aes(x = cumPos, y = PBS0, color = factor(chr_num))) +
+  geom_point(size = 1) +
+  scale_x_continuous(breaks = chr_labels_pbs$mid, 
+                     labels = chr_labels_pbs$chr_num) +
+  scale_color_manual(values = rep(c("grey30","skyblue"),
+                                  length.out = length(unique(pbs_plot$chr_num)))) +
+  geom_hline(yintercept = threshold_pbs0, linetype = "dashed", color = "red") +
+  theme_classic() +
+  labs(x = "Chromosome", y = "PBS (20 kb window)", title = "PRE") +
+  theme(legend.position = "none") +
+  ylim(0.00, 0.20)
+
