@@ -118,7 +118,7 @@ echo "Done!"
 
 ######################################################################################
 ## Step 5. Calculate neutrality test statistics (thetaStat)
-# Below is the example for one group. Similarly, analysis is done for all other groups. Calculations were done per chromosome, instead of windows.
+# Below is the example for one group. Similarly, analysis is done for all other groups. 
 
 #!/bin/bash
 #SBATCH --job-name=thetaStat_PRE
@@ -145,6 +145,8 @@ thetaStat do_stat $theta/PRE/saf2theta_PRE.thetas.idx \
 
 echo "Done!"
 
+# NOTE: For estimating thetas for non-overlappin windows, the command above was supplied with these settings: -win 20000 -step 20000
+
 # Analysis time for the settings specified above: 3 min.
 
 
@@ -153,7 +155,7 @@ echo "Done!"
 # The output file from angsd (Step 5 above; .pestPG file) contains various theta estimates per chromosome. 
 # I prepared the file for R analyses by selecting estimates of interest for my analysis: chromosome, winCenter, Watterson's theta (tW), nucletide diversity (tP), Tajima, and number of sites.
 # In addition, in Excel, I calculated tW and tP per site (by dividing the chromosome-level theta by number of sites in the chromosome), and added these values to new columns. 
-# Then, I combined results from all three groups (PRE, BOT, POST) to the same file, and added a column that defined the group. This file was loaded to 
+# Then, I combined results from all three groups (PRE, BOT, POST) to the same file, and added a column that defined the group. This file was loaded to R.
 
 ## Part 1: Loading and inspecting data
 thetas <- read.csv("thetas_sorted_2x.csv", header = TRUE, sep = ";")
@@ -173,7 +175,7 @@ aggregate(thetas$Tajima, by = list(thetas$Group), summary)
 tWs_PRE <- thetas$tWpersite [thetas$Group == "PRE"]
 shapiro.test(tWs_PRE)
 tPs_PRE <- thetas$tPpersite [thetas$Group == "PRE"]
-shapiro.test(tPs_PRE) #not significant -> normal
+shapiro.test(tPs_PRE)
 tajima_PRE <- thetas$Tajima [thetas$Group == "PRE"]
 shapiro.test(tajima_PRE) #not significant -> normal
 
@@ -194,7 +196,7 @@ tajima_POST <- thetas$Tajima [thetas$Group == "POST"]
 shapiro.test(tajima_POST)
 
 #---------------------------------------------------------------------------------------------------------------
-# Part 3: Estimate average (or median for non-normal distribution) weighted by number of sites
+# Part 3: Estimate per group thetas weighted by number of sites
 nSites_PRE <- thetas$nSites [thetas$Group == "PRE"]
 nSites_BOT <- thetas$nSites [thetas$Group == "BOT"]
 nSites_POST <- thetas$nSites [thetas$Group == "POST"]
@@ -220,14 +222,9 @@ tWs_weighed_POST
 #---------------------------------------------------------------------------------------------------------------
 # Part 4: Perform Friedman test for simultaneous comparison of three groups.
 # Friedman test is used to compare multiple groups, non-parametric data, but dependent variables (i.e. paired) - here, to account for the same chromosomes in each group.
-# Watterson's theta
-friedman.test(tWpersite ~ Group | Chr, data = thetas)
-
-# Pairwise nucleotide diversity
-friedman.test(tPpersite ~ Group | Chr, data = thetas)
-
-# Tajima's D
-friedman.test(Tajima ~ Group | Chr, data = thetas)
+friedman.test(tWpersite ~ Group | Chr, data = thetas) #Watterson's theta
+friedman.test(tPpersite ~ Group | Chr, data = thetas) #Pairwise nucleotide diversity
+friedman.test(Tajima ~ Group | Chr, data = thetas) #Tajima's D
 
 #The results for Friedman were the same, because the pattern across chromosomes remains for all three estimators. 
 #Check correlation between parameters. 
@@ -235,9 +232,68 @@ cor(thetas$tWpersite, thetas$tPpersite) #strong positive correlation
 cor(thetas$tWpersite, thetas$Tajima) #strong negative correlation
 cor(thetas$tPpersite, thetas$Tajima) #strong negative correlation
 
+#---------------------------------------------------------------------------------------------------------------
+# Part 5: Plot genome-wide distributions of nucleotide diversity and Tajima's D as Manhattan plots.
+# Below is the example for one group. Similarly, plotting is done for all other groups.
 
+library(ggplot2)
+library(dplyr)
 
+# Load, inspect and prepare the data
+thetas_PRE <- read.table("PRE_20kb.csv", header = TRUE, sep = ",")
+head(thetas_PRE)
+range(thetas_PRE$nSites)
 
+thetas_PRE <- subset(thetas_PRE, nSites > 0) #Exclude rows with zero sites
 
+# Load ref genome .fai file for chr lengths
+fai <- read.table("/path/to/ref_genome/GCF_900496995.4_bAquChr1.4_genomic.fna.fai", sep = "\t", head = FALSE)
+head (fai)
+colnames(fai) <- c("Chr", "Chr_len", "Byte_offset", "Bases_per_line", "Bytes_per_line")
+
+chr_lengths <- fai %>%
+  select(Chr, Chr_len) %>%
+  mutate(chr_start = lag(cumsum(Chr_len), default = 0))
+head(chr_lengths)
+
+# Create a file that defines chr lengths based on fai file (save only first 2 columns), save only 26 autosomes.
+chr_lengths_plot <- fai %>%
+  filter(Chr %in% thetas_PRE$Chr) %>%
+  select(Chr, Chr_len) %>%
+  mutate(chr_num = row_number(),         # 1..26
+         chr_start = lag(cumsum(Chr_len), default = 0))
+head(chr_lengths_plot)
+
+# Combine data, i.e. add lengths to the initial table but call it as a new object
+thetas_plot <- thetas_PRE %>%
+  left_join(chr_lengths_plot, by = "Chr") %>%
+  mutate(cumPos = WinCenter + chr_start)
+head(thetas_plot)
+
+# Add points for X axis for placing chromosome names
+chr_midpoints <- chr_lengths_plot$chr_start + chr_lengths_plot$Chr_len / 2
+chr_labels <- chr_lengths_plot$chr_num  # 1..26
+
+# Make chr_num a factor for coloring
+thetas_plot$chr_num <- factor(thetas_plot$chr_num)
+
+# Plot Tajima's D
+ggplot(thetas_plot, aes(x = cumPos, y = Tajima, color = chr_num)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = rep(c("grey30", "skyblue"), length.out = nlevels(thetas_plot$chr_num))) +
+  scale_x_continuous(breaks = chr_midpoints, labels = chr_labels) +
+  theme_classic() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 1) +
+  labs(x = "Chromosome", y = "Tajima's D (non-overlapping 20 kb windows)", title = "PRE_2x") +
+  theme(legend.position = "none")
+
+# Plot nucleotide diversity
+ggplot(thetas_plot, aes(x = cumPos, y = tPpersite, color = chr_num)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = rep(c("grey30", "skyblue"), length.out = nlevels(thetas_plot$chr_num))) +
+  scale_x_continuous(breaks = chr_midpoints, labels = chr_labels) +
+  theme_classic() +
+  labs(x = "Chromosome", y = "Nucleotide diversity per site (non-overlapping 20 kb windows)", title = "PRE_2x") +
+  theme(legend.position = "none")
 
 
