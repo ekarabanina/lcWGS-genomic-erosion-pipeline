@@ -48,4 +48,12 @@ echo "Done!"
 
 #if you want to run GL estimation excluding transitions, supply parameter -rmTrans 1
 
+#---------------------
+# Use of resources:
+#Nodes: 1
+#Cores per node: 4
+#CPU Efficiency: 83.83% of 2-11:43:24 core-walltime
+#Job Wall-clock time: 14:55:51
+#Memory Utilized: 4.56 GB
+
 
