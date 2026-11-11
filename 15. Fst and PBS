@@ -1,6 +1,6 @@
 # Estimating Fst and population branch statistics (PBS) with ANGSD
 
-# Programs: ANGSD 0.940, RStudio
+# Programs: ANGSD 0.940, RStudio, unix shell
 
 # Steps:
 # 1. Create bamlists for each group/populaton (unix shell)
