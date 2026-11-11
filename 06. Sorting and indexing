@@ -3,6 +3,7 @@
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
+######################################################################################
 #!/bin/bash
 #SBATCH --job-name=sorting_indexing_autosomes_noSoftClips
 #SBATCH --output=sorting_indexing_autosomes_noSoftClips_%j.txt
