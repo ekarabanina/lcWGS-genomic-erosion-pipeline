@@ -328,10 +328,10 @@ chr_midpoints <- chr_lengths_plot$chr_start +
 chr_labels <- chr_lengths_plot$chr_num
 
 # Calculate threshold using original PBS values (PRE = PBS0, BOT = PBS1, POST = PBS2)
-mean_pbs <- mean(pbs_plot$PBS2, na.rm = TRUE)
-sd_pbs <- sd(pbs_plot$PBS2, na.rm = TRUE)
-threshold_pbs <- mean_pbs + 4 * sd_pbs
-threshold_pbs
+mean_pbs2 <- mean(pbs_plot$PBS2, na.rm = TRUE)
+sd_pbs2 <- sd(pbs_plot$PBS2, na.rm = TRUE)
+threshold_pbs2 <- mean_pbs2 + 4 * sd_pbs2
+threshold_pbs2
 
 # Plot PBS
 ggplot(pbs_plot, aes(x = cumPos, y = PBS2, color = factor(chr_num))) +
@@ -346,7 +346,7 @@ ggplot(pbs_plot, aes(x = cumPos, y = PBS2, color = factor(chr_num))) +
   ) +
   geom_hline(yintercept = 0, linetype = "dashed",
              color = "black") +
-  geom_hline(yintercept = threshold_pbs, linetype = "dashed",
+  geom_hline(yintercept = threshold_pbs2, linetype = "dashed",
              color = "red") +
   theme_classic() +
   labs(
