@@ -1,14 +1,14 @@
 # Estimating thetas (nucleotide diversity, Watterson's theta, and Tajima's D) with ANGSD
 
-# Programs: ANGSD 0.940, RStudio
+# Programs: ANGSD 0.940, RStudio, unix shell
 
 # Steps:
-# 1. Create bamlists for each group/populaton
-# 2. Run doSaf per group
-# 3. Calculate SFS for each group pair (realSFS)
-# 4. Calculate per-site thetas (saf2theta)
-# 5. Calculate neutrality test statistics (thetaStat)
-# 6. Calculate weighted thetas, plot, and do statistical comparisons of groups in R
+# 1. Create bamlists for each group/populaton (unix shell)
+# 2. Run doSaf per group (angsd)
+# 3. Calculate SFS for each group pair (realSFS, angsd)
+# 4. Calculate per-site thetas (saf2theta, angsd)
+# 5. Calculate neutrality test statistics (thetaStat, angsd)
+# 6. Calculate weighted thetas, plot, and do statistical comparisons of groups (RStudio)
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
@@ -16,7 +16,6 @@
 ## Step 1: Create bamlists for each group/populaton
 # Bamlist is a text document that contains full paths to bam files belonging to the group of interest (here, PRE, BOT, POST). It can be created, for example, using the ls -1 command:
 ls -1 /dir/*.bam > bamlist_PRE.txt
-
 
 ######################################################################################
 ## Step 2: Run doSaf per group.
@@ -148,7 +147,6 @@ echo "Done!"
 # NOTE: For estimating thetas for non-overlappin windows, the command above was supplied with these settings: -win 20000 -step 20000
 
 # Analysis time for the settings specified above: 3 min.
-
 
 ######################################################################################
 ## Step 6. Calculate weighted thetas, plot, and do statistical comparisons of groups in R
