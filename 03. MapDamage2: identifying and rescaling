@@ -1,6 +1,6 @@
 # MapDamage2: identifying DNA damage patterns and rescaling quality scores of likely damaged positions in the reads.
 
-# Program: MapDamage2: https://ginolhac.github.io/mapDamage/
+# Program: MapDamage2 (https://ginolhac.github.io/mapDamage/)
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 # The program can be run individually for each bam file or as an array job to process multiple files. Below is the script for an array job.
