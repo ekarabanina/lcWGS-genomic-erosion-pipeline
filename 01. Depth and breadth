@@ -5,6 +5,7 @@
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
+######################################################################################
 # Resources: mem=6M, cpus-per-task=1, ntasks=1
 # Code below uses names for the 2x downsampled bam files. 
 
