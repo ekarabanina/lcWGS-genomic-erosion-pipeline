@@ -5,6 +5,7 @@
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 # The program can be run individually for each bam file or as an array job to process multiple files. Below is the script for an array job.
 
+######################################################################################
 #!/bin/bash
 #SBATCH --job-name=array_mapdamage
 #SBATCH --output=array_mapdamage_%j.txt
