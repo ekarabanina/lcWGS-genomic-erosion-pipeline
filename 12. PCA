@@ -5,8 +5,8 @@
 # Details about PCAngsd: https://www.popgen.dk/software/index.php/PCAngsd
 
 # Steps:
-# 1. Run PCAngsd to obtain a covariate matrix
-# 2. Analyse the covariate matrix and plot the PCA plot in RStudio
+# 1. Run PCAngsd to obtain a covariate matrix (pcangsd)
+# 2. Analyse the covariate matrix and plot the PCA plot (RStudio)
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
