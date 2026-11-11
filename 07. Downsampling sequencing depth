@@ -7,6 +7,7 @@
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
+######################################################################################
 #!/bin/bash
 #SBATCH --job-name=downsampling_array
 #SBATCH --output=downsampling_array_%A_%a.txt
