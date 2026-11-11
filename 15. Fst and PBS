@@ -3,13 +3,13 @@
 # Programs: ANGSD 0.940, RStudio
 
 # Steps:
-# 1. Create bamlists for each group/populaton
-# 2. Run doSaf per group
-# 3. Calculate 2-dimensional site frequency spectrum (SFS) for each group pair (realSFS)
-# 4. Calculate Fst binary files (realSFS)
-# 5. Extract Fst from binary files (realSFS)
-# 6. Calculate weighted Fst and PBS in R
-# 7. Plot PBS distributions as Manhattan plots in R
+# 1. Create bamlists for each group/populaton (unix shell)
+# 2. Run doSaf per group (angsd)
+# 3. Calculate 2-dimensional site frequency spectrum (SFS) for each group pair (realSFS, angsd)
+# 4. Calculate Fst binary files (realSFS, angsd)
+# 5. Extract Fst from binary files (realSFS, angsd)
+# 6. Calculate weighted Fst and PBS (RStudio) 
+# 7. Plot PBS distributions as Manhattan plots (RStudio) 
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
@@ -18,21 +18,20 @@
 # Bamlist is a text document that contains full paths to bam files belonging to the group of interest (here, PRE, BOT, POST). It can be created, for example, using the ls -1 command:
 ls -1 /dir/*.bam > bamlist_PRE.txt
 
-
 ######################################################################################
 ## Step 2: Run doSaf per group.
 # Below is the example for one of the groups. Similarly, analysis is done for all other groups.
 
 !/bin/bash
-#SBATCH --job-name=doSaf_all_autosomes_bamlist_PRE
-#SBATCH --output=doSaf_all_autosomes_bamlist_PRE_%j.txt
-#SBATCH --error=doSaf_all_autosomes_bamlist_PRE_%j.txt
+#SBATCH --job-name=doSaf_PRE
+#SBATCH --output=doSaf_PRE_%j.txt
+#SBATCH --error=doSaf_PRE_%j.txt
 #SBATCH --account=<name>
 #SBATCH --partition=small
 #SBATCH --time=72:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=10
-#SBATCH --mem=5G
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=2G
 #SBATCH --nodes=1
 
 echo "Defining paths and variables..."
@@ -44,15 +43,26 @@ echo "Loading angsd module..."
 module load angsd
 
 echo "Running -doSaf..."
-angsd -P 10 -bam $bamlist -anc $ref -ref $ref \
--out $out_dir/doSaf_bamlist_PRE \
+angsd -P 4 -bam $bamlist -anc $ref -ref $ref \
+-out $out_dir/doSaf_2x_PRE \
 -GL 1 -doSaf 1 \
 -remove_bads 1 -uniqueOnly 1 -only_proper_pairs 1 \
 -baq 1 -C 50 \
 -minMapQ 30 -minQ 20 \
-&> $out_dir/doSaf_bamlist_PRE.log
+-doCounts 1 \
+-minInd 5 \
+-setMinDepthInd 1 -setMaxDepthInd 8 \
+&> $out_dir/doSaf_2x_PRE.log
 
 echo "Done!"
+
+#---------------------
+# Use of resources:
+#Cores per node: 4
+#CPU Efficiency: 61.57% of 03:17:00 core-walltime
+#Job Wall-clock time: 00:49:15
+#Memory Utilized: 1.97 GB
+#Memory Efficiency: 98.71% of 2.00 GB
 
 ######################################################################################
 ## Step 3: Run realSFS to calculate 2-dimensional site frequency spectrum (SFS) for each group pair.
@@ -153,7 +163,6 @@ $input_dir/POST/doSaf_POST.saf.idx \
 
 echo "Done!"
 
-
 ######################################################################################
 ## Step 5: Run realSFS fst stats to extract Fst and PBS from binary files. Here, in non-overlapping windows (using stats2 option).
 
@@ -211,7 +220,6 @@ realSFS fst stats2 $dir/pbs.fst.idx -win 20000 -step 20000 \
 echo "Done!"
 
 # NOTE: The commands above will create a text file with results. Columns: region, chromosome, midPost, Nsites, Fst and/or PBS. Each row is a window. If I remember correctly, last column, containing Fst values is not named for some reason. So, before loading the file to R, name it.
-
 
 ######################################################################################
 ## Step 6: Calculate weighted Fst and PBS in R, plot PBS
