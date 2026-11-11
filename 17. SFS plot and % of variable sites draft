@@ -1,3 +1,157 @@
 # Comparing site frequency spectra (SFS) across groups and calculating the percentage of variable sites
+# SFS can be plotted for groups with different sample sizes. However, my purpose was to visually compare the SFSs and percentage of variable sites across groups. For that, sample sizes should be the same. Here, I downsampled all groups to seven individuals. In SFS, seven diploid individuals totals 14 gene copies
 
 # Programs: ANGSD 0.940, RStudio
+
+# Steps:
+# 1. Create bamlists for each group/populaton (unix shell)
+# 2. Run doSaf per group (angsd)
+# 3. Calculate 1-dimensional site frequency spectrum (SFS) for each group (angsd)
+# 4. Calculate percentage of variable sites (RStudio) 
+# 5. Plot SFS (RStudio)
+
+# All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+######################################################################################
+## Step 1: Create bamlists for each group/populaton
+# Bamlist is a text document that contains full paths to bam files belonging to the group of interest (here, PRE, BOT, POST). It can be created, for example, using the ls -1 command on unix shell:
+ls -1 /dir/*.bam > bamlist_PRE.txt
+
+######################################################################################
+## Step 2: Run doSaf per group.
+# Below is the example for one of the groups. Similarly, analysis is done for all other groups.
+
+!/bin/bash
+#SBATCH --job-name=doSaf_PRE
+#SBATCH --output=doSaf_PRE_%j.txt
+#SBATCH --error=doSaf_PRE_%j.txt
+#SBATCH --account=<name>
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=2G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+ref="/path/to/reference_genome.fna"
+bamlist="/path/to/bamlist_PRE.txt"
+out_dir="/path/to/save/results"
+
+echo "Loading angsd module..."
+module load angsd
+
+echo "Running -doSaf..."
+angsd -P 4 -bam $bamlist -anc $ref -ref $ref \
+-out $out_dir/doSaf_2x_PRE \
+-GL 1 -doSaf 1 \
+-remove_bads 1 -uniqueOnly 1 -only_proper_pairs 1 \
+-baq 1 -C 50 \
+-minMapQ 30 -minQ 20 \
+-doCounts 1 \
+-minInd 5 \
+-setMinDepthInd 1 -setMaxDepthInd 8 \
+&> $out_dir/doSaf_2x_PRE.log
+
+echo "Done!"
+
+#---------------------
+# Use of resources:
+#Cores per node: 4
+#CPU Efficiency: 61.57% of 03:17:00 core-walltime
+#Job Wall-clock time: 00:49:15
+#Memory Utilized: 1.97 GB
+#Memory Efficiency: 98.71% of 2.00 GB
+
+######################################################################################
+## Step 3: Run realSFS to calculate 1-dimensional site frequency spectrum (SFS) for each group.
+# Below is the example for one of the groups. Similarly, analysis is done for all other groups.
+
+#!/bin/bash
+#SBATCH --job-name=realsfs_PRE
+#SBATCH --output=realsfs_PRE_%j.txt
+#SBATCH --error=realsfs_PRE_%j.txt
+#SBATCH --account=project_2006568
+#SBATCH --partition=small
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=55G
+#SBATCH --nodes=1
+
+echo "Defining paths and variables..."
+dir="/path/to/doSaf_results" #from Step 2 above
+
+echo "Loading angsd module..."
+module load angsd
+
+echo "Running realSFS..."
+realSFS -cores 10 -fold 1 \
+$dir/doSaf_PRE.saf.idx > $dir/realsfs_2x_PRE.ml \
+2> $dir/realsfs_2x_PRE.errors
+
+echo "Done!"
+
+#---------------------
+# Use of resources:
+#Cores per node: 10
+#CPU Efficiency: 75.05% of 06:10:00 core-walltime
+#Job Wall-clock time: 00:37:00
+#Memory Utilized: 49.79 GB
+#Memory Efficiency: 90.52% of 55.00 GB
+
+######################################################################################
+## Step 4: Calculate percentage of variable sites (done in RStudio)
+# Below, the script is for one of the groups (PRE). Similarly, analysis is done for all other groups.
+
+# Calculating the percentage of variable sites is done as (1-monomorphic)*100%
+
+# Load data
+sfs_PRE <- scan("/path/to/realsfs_output_PRE.ml") #the file produced in Step 3 above, with .ml extension
+
+# First, normalize data, including monomorphic sites. Original SFS is counts. Normalization transforms the data into frequencies.
+norm <- function(x) x/sum(x)
+sfs_PRE_norm_all <- norm(sfs_PRE)
+sfs_PRE_norm_all
+
+# Calculate percentage of variable sites (pvar)
+pvar_PRE <- (1-sfs_PRE_norm_all[1])*100
+pvar_PRE
+
+######################################################################################
+## Step 5: Plot SFS (in RStudio)
+
+# Load data
+sfs_PRE <- scan("/path/to/realsfs_output_PRE.ml")
+sfs_BOT <- scan("/path/to/realsfs_output_BOT.ml")
+sfs_POST <- scan("/path/to/realsfs_output_POST.ml")
+
+# Perform normalization for POLYMORPHIC sites to see values as proportions instead of counts
+norm <- function(x) x/sum(x)
+sfs_PRE_norm <- norm(sfs_PRE[-c(1)])
+sfs_BOT_norm <- norm(sfs_BOT[-c(1)])
+sfs_POST_norm <- norm(sfs_POST[-c(1)])
+
+# Combine data
+combined_data <- rbind(sfs_PRE_norm, sfs_BOT_norm, sfs_POST_norm) #rbind is row binding, cbins is column binding
+combined_data
+
+allele_freq_class <- as.character(1:14) #here, there are 14 classes, because I was using 7 individuals from each group, which totals to 14 gene copies.
+
+# Identify columns where all groups are zero (I am using folded SFS, so half of frequency classes from angsd output appear as zeros)
+nonzero_idx <- colSums(combined_data) > 0
+
+# Subset data and corresponding names
+combined_data_nonzero <- combined_data[, nonzero_idx]
+allele_freq_class_nonzero <- allele_freq_class[nonzero_idx]
+
+# Plot
+colour <- c("POST" = "#440154", "BOT" = "#FFDD44", "PRE" = "#21918c")
+barplot(combined_data_nonzero, beside = TRUE,
+        col = c(colour["PRE"], colour["BOT"], colour["POST"]), 
+        legend = c("PRE", "BOT", "POST"),
+        ylab = "Proportion", 
+        xlab = "Minor allele frequency",
+        main = "SFS plot", 
+        names.arg = allele_freq_class_nonzero, #this displays numbers of freq classes on x-axis
+        ylim = c(0, max(sfs_PRE_norm) * 1.1))
