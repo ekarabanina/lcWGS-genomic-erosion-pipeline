@@ -1,8 +1,11 @@
 # Realignment around indels with GATK IndelRealigner
 # Program: GATK v3.8.1.0
-# Requires two steps: (1) creating the target intervals and (2) realignment. 
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
+
+# Steps:
+# 1. Creating target intervals
+# 2. Realignment
 
 ######################################################################################
 ## Step 1: Creating target intervals
