@@ -1,7 +1,7 @@
 # Comparing site frequency spectra (SFS) across groups and calculating the percentage of variable sites
 # SFS can be plotted for groups with different sample sizes. However, my purpose was to visually compare the SFSs and percentage of variable sites across groups. For that, sample sizes should be the same. Here, I downsampled all groups to seven individuals. In SFS, seven diploid individuals totals 14 gene copies
 
-# Programs: ANGSD 0.940, RStudio
+# Programs: ANGSD 0.940, RStudio, unix shell
 
 # Steps:
 # 1. Create bamlists for each group/populaton (unix shell)
