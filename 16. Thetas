@@ -233,7 +233,7 @@ cor(thetas$tWpersite, thetas$Tajima) #strong negative correlation
 cor(thetas$tPpersite, thetas$Tajima) #strong negative correlation
 
 #---------------------------------------------------------------------------------------------------------------
-# Part 5: Plot genome-wide distributions of nucleotide diversity and Tajima's D as Manhattan plots.
+# Part 5: Plot genome-wide distributions of Tajima's D as Manhattan plots.
 # Below is the example for one group. Similarly, plotting is done for all other groups.
 
 library(ggplot2)
@@ -287,13 +287,6 @@ ggplot(thetas_plot, aes(x = cumPos, y = Tajima, color = chr_num)) +
   labs(x = "Chromosome", y = "Tajima's D (non-overlapping 20 kb windows)", title = "PRE_2x") +
   theme(legend.position = "none")
 
-# Plot nucleotide diversity
-ggplot(thetas_plot, aes(x = cumPos, y = tPpersite, color = chr_num)) +
-  geom_point(size = 1) +
-  scale_color_manual(values = rep(c("grey30", "skyblue"), length.out = nlevels(thetas_plot$chr_num))) +
-  scale_x_continuous(breaks = chr_midpoints, labels = chr_labels) +
-  theme_classic() +
-  labs(x = "Chromosome", y = "Nucleotide diversity per site (non-overlapping 20 kb windows)", title = "PRE_2x") +
-  theme(legend.position = "none")
+
 
 
