@@ -5,7 +5,9 @@
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
+######################################################################################
 #  The analyses was run per chromosome as an array job to optimize the resource use.
+
 #!/bin/bash
 #SBATCH --job-name=doError_array_2x
 #SBATCH --output=doError_array_2x_%A_%a.txt
