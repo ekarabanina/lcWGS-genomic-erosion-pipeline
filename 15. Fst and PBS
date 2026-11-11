@@ -290,60 +290,68 @@ weighted_pbs_POST
 
 ######################################################################################
 ## Step 7: Plot PBS distributions as Manhattan plots in R (PBS values vs genomic position). 
-# Below the script is only for PRE group. Similarly, plotting is done for all other groups.
+# Below the script is only for POST group. Similarly, plotting is done for all other groups.
 
 # If you are not following the calculations in Step 6 above, load libraries and data to R.
 install.packages("ggplot2","dplyr")
 library(ggplot2)
 library(dplyr)
 pbs <- read.table("pbs_stats2_2x.txt", header = TRUE)
-head(pbs)
 
-# Shift each chromosome along the X axis, so they are adjacent to each other and not overlapping
-# First, get length of each chromosome
-chr_lengths_pbs <- pbs %>% 
-  group_by(chr) %>% 
-  summarise(chr_len = max(midPos)) #as approx. chromosome length
-head(chr_lengths_pbs)
+# Load ref genome .fai file for chr lengths
+fai <- read.table("/path/to/ref/genome/GCF_900496995.4_bAquChr1.4_genomic.fna.fai", sep = "\t", head = FALSE)
+head (fai)
+colnames(fai) <- c("Chr", "Chr_len", "Byte_offset", "Bases_per_line", "Bytes_per_line")
 
-# Make sure that the chromosomes start one after another
-chr_lengths_pbs <- chr_lengths_pbs %>% 
-  mutate(chr_start = lag(cumsum(chr_len), default = 0))
-head(chr_lengths_pbs)
+chr_lengths <- fai %>%
+  select(Chr, Chr_len) %>%
+  mutate(chr_start = lag(cumsum(Chr_len), default = 0))
+head(chr_lengths)
 
-# Add starting chr positions to the data table (here, name fst_plot)
-pbs_plot <- pbs %>% 
-  left_join(chr_lengths_pbs, by = "chr") %>% 
+# Create a file that includes only chromosomes present in PBS dataset and assignt them sequential numbers (1-26, i.e., autosomes).
+chr_lengths_plot <- fai %>%
+  filter(Chr %in% pbs$chr) %>%
+  select(Chr, Chr_len) %>%
+  mutate(chr_num = row_number(),         # 1..26
+         chr_start = lag(cumsum(Chr_len), default = 0))
+head(chr_lengths_plot)
+
+# Add chromosome information column to the PBS data file
+pbs_plot <- pbs %>%
+  left_join(chr_lengths_plot, by = c("chr" = "Chr")) %>%
   mutate(cumPos = midPos + chr_start)
 head(pbs_plot)
 
-# Change chr names to 1,2,3...26
-pbs_plot$chr_num <- as.numeric(factor(pbs_plot$chr)) 
+# Calculate chromosome midpoints for placing X-axis labels and define positions of these labels (for plotting later)
+chr_midpoints <- chr_lengths_plot$chr_start +
+  chr_lengths_plot$Chr_len / 2
+chr_labels <- chr_lengths_plot$chr_num
 
-# Make labels of chromosome numbers for plotting
-chr_labels_pbs <- pbs_plot %>%
-  group_by(chr_num) %>%
-  summarise(mid = mean(cumPos))
+# Calculate threshold using original PBS values (PRE = PBS0, BOT = PBS1, POST = PBS2)
+mean_pbs <- mean(pbs_plot$PBS2, na.rm = TRUE)
+sd_pbs <- sd(pbs_plot$PBS2, na.rm = TRUE)
+threshold_pbs <- mean_pbs + 4 * sd_pbs
+threshold_pbs
 
-# Some pbs values are negative, so for plotting I will make them zero
-pbs_plot$PBS0[pbs_plot$PBS0 < 0] <- 0
-
-# Add a threshold. For example, as four standard deviations above the mean:
-mean_pbs0 <- mean(pbs_plot$PBS0)
-sd_pbs0   <- sd(pbs_plot$PBS0)
-threshold_pbs0 <- mean_pbs0 + 4 * sd_pbs0  # 4 SD above mean
-threshold_pbs0
-
-# Plot
-ggplot(pbs_plot, aes(x = cumPos, y = PBS0, color = factor(chr_num))) +
+# Plot PBS
+ggplot(pbs_plot, aes(x = cumPos, y = PBS2, color = factor(chr_num))) +
   geom_point(size = 1) +
-  scale_x_continuous(breaks = chr_labels_pbs$mid, 
-                     labels = chr_labels_pbs$chr_num) +
-  scale_color_manual(values = rep(c("grey30","skyblue"),
-                                  length.out = length(unique(pbs_plot$chr_num)))) +
-  geom_hline(yintercept = threshold_pbs0, linetype = "dashed", color = "red") +
+  scale_color_manual(
+    values = rep(c("grey30", "skyblue"),
+                 length.out = length(unique(pbs_plot$chr_num)))
+  ) +
+  scale_x_continuous(
+    breaks = chr_midpoints,
+    labels = chr_labels
+  ) +
+  geom_hline(yintercept = 0, linetype = "dashed",
+             color = "black") +
+  geom_hline(yintercept = threshold_pbs, linetype = "dashed",
+             color = "red") +
   theme_classic() +
-  labs(x = "Chromosome", y = "PBS (20 kb window)", title = "PRE") +
-  theme(legend.position = "none") +
-  ylim(0.00, 0.20)
-
+  labs(
+    x = "Chromosome",
+    y = "PBS (20 kb window)",
+    title = "POST"
+  ) +
+  theme(legend.position = "none")
