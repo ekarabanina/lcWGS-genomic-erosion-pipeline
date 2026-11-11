@@ -3,6 +3,7 @@
 
 # All cluster jobs were performed on Puhti, CSC supercomputer: https://csc.fi/en/
 
+######################################################################################
 #!/bin/bash
 #SBATCH --job-name=excluding_softClips_autosomes_preprocessed
 #SBATCH --output=excluding_softClips_autosomes_preprocessed_%j.txt
