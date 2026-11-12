@@ -73,9 +73,26 @@ echo "Done!"
 
 ######################################################################################
 ## Step 2: Extract likelihood values and prepare an input file for R 
-#to be added..
+# Best likelihood per K, per run, per permutation was saved into the .log file of each run and permutation, on the last line.
+# The example of how the result looks is: best like=-19774486.706231 after 1250 iterations
+# Therefore, it is possible to write a bash script to extract only the numerical value and add column with information about the K, run, and permutation. 
+# The code below is how I did it, but not the most optimal coding way.
 
+# 1. Extracting lines into a new file. 
+for file in *.log; do
+    grep "best like=" "$file" | awk -F 'best like=| after' -v f="$file" '{print f, $2}'
+done > all_likes.txt
 
+# 2. Transforming the file into a table with 3 columns (K, run, likelihood).
+awk '{
+    match($1, /_k([0-9]+)/, karr); k=karr[1];
+    match($1, /_r([0-9]+)/, rarr); run=rarr[1];
+    print k "\t" run "\t" $2;
+}' "all_likes.txt" | \
+sort -k1,1n -k2,2n > "likes_parsed_sorted.txt"
+
+# 3. Extracting only K and likelihood columns
+awk '{print $1, $3}' "likes_parsed_sorted.txt" > "only_likes.txt"
 
 
 ######################################################################################
